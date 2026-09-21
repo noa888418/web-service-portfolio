@@ -11,7 +11,9 @@
 
 ## 技術と作業単位
 
-- PostgreSQL、Docker、AWS ECS、Terraform、GitHub Actions を使用する方針です。React / Next.js、Laravel / FastAPI、テストツール、予算・公開方法は未決定です。
+- 題材は社内IT依頼・改善管理サービスです。React + TypeScript + Vite、Laravel、PostgreSQL、Docker、AWS ECS、Terraform、GitHub Actions の使用は決定済みです。AWS 月額予算は 3,000 円、公開は月 60 時間程度の事前案内期間のみ、独自ドメインは未所有です。
+- AWS の基本構成・認証・撤去案は docs/architecture.md、見積もり条件は docs/costs.md を参照してください。ユーザー決定と設計上の提案・未検証事項を区別し、使用時間には構築・検証・撤去も含めて見積もってください。各製品のバージョンや追加の検査ツールは未選定です。
+- 公開デモでも `APP_ENV=production`、`APP_DEBUG=false` の安全な実行設定を用いる設計案です。デモ投入の可否を APP_ENV だけで判断せず、用途・対象 DB・明示許可を確認する条件を守ってください。通常デプロイで `migrate:fresh` を使用しないでください。
 - 変更は一つの目的で説明・レビュー・検証できる小さな単位に分けます。無関係な整理や機能追加を混ぜないでください。
 - 実装前に目的、受け入れ条件、影響範囲、セキュリティ上の懸念、検証方法を整理します。
 - 技術選定や設計変更では、候補、採用理由、不採用理由、制約を関連文書に残します。実装と文書の整合を保ってください。

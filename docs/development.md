@@ -1,4 +1,12 @@
-# Windows での秘密情報検査
+# 開発環境と Windows での秘密情報検査
+
+## プロジェクトの決定事項と現在の範囲
+
+React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actions の使用は決定済みです。AWS 月額予算は 3,000 円、月 60 時間程度の事前案内期間のみ公開し、独自ドメインは未所有です。
+
+現在導入・確認済みなのは下記の秘密情報検査環境です。Node / PHP / Composer / Laravel / Terraform 等の導入、Docker によるアプリ起動、AWS リソース作成は今回行っていません。バージョン・lock・追加検査ツールは実装段階で決めます。Python は検査補助用であり、バックエンドは Laravel です。
+
+AWS のサブネット・SG・Cookie セッション・キャッシュ・OIDC・撤去は [基本設計案](architecture.md)、公式料金と構築・検証・撤去を含む 60 時間の試算は [費用見積もり](costs.md)を参照してください。調査済みの仕様と実機での検証済み事項を区別します。
 
 ## 採用した方法
 
@@ -113,3 +121,13 @@ CI は取得済みの参照から到達できる履歴を対象とし、未取�
 - [Gitleaks の利用方法・設定](https://github.com/gitleaks/gitleaks/tree/v8.30.1)：既定ルール継承、redact、Git 差分検査の根拠
 - [actions/checkout](https://github.com/actions/checkout/tree/v4.2.2)：全履歴取得と認証情報の非保持
 - [GitHub Actions のイベント](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)：push / pull_request の実行条件
+
+## 今後のアプリ・AWS 作業の進め方（提案・未実施）
+
+1. 選定済み技術の対応バージョンを固定し、Docker 内で Vite の build と Laravel の依存関係取得・テストを再現する。実行 image は必要最小限の内容、非 root、マルチステージとする。秘密値を build args / VITE_* / image へ埋め込まない。
+2. 依存関係検査、イメージ検査、SBOM、Terraform fmt / validate / IaC 検査を追加し、失敗をマージ・配布の成功扱いにしない。Terraform AWS Provider は調査時 v6.65.0 を参照したが、導入と validate は未実施。
+3. 公開デモは `APP_ENV=production`、`APP_DEBUG=false` を使用する。データ投入の可否は `DEPLOYMENT_PURPOSE=demo` 等の用途、対象 account / DB の照合、ジョブごとの明示許可で分ける。既定は投入拒否とし、通常の起動・deployment から seed を呼ばない。
+4. 通常デプロイは既存 DB を維持する差分 migration とし、単発 ECS task で結果を確認する。`migrate:fresh` は使わない。デモデータの reset は保存対象の確認と復元手順を伴う別作業にする。
+5. 公開前に state・snapshot の保護と残り予算を確認し、公開終了時に CloudFront の閉鎖・関連付け解除・runtime 撤去・課金対象の残存を確認する。RDS 停止や ECS の task 数 0 だけで完了にしない。
+
+Cookie 認証の API 検証では適切な CSRF 値を用意し、認可拒否と CSRF 拒否を区別します。CloudFront の URL が変わる再構築では APP_URL・許可ホスト・案内 URL を更新し、以前のセッションを引き継がないことを確認します。GitHub Actions からの AWS 認証は OIDC を用いる方針案で、現時点の secret scan workflow には AWS 権限を追加していません。
