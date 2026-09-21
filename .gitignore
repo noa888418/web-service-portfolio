@@ -1,0 +1,41 @@
+# Local environment values; only dummy examples belong in Git.
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Terraform working files, state, saved plans, and variable values.
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.*
+*.plan
+*.plan.*
+tfplan
+tfplan.*
+plan.out
+*.tfvars
+*.tfvars.json
+*.tfvars.*
+*.tfvars.json.*
+!*.tfvars.example
+!*.tfvars.json.example
+!**/.terraform.lock.hcl
+crash.log
+crash.*.log
+.terraformrc
+terraform.rc
+
+# Private key material and local credentials.
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+
+# Repository-local tooling, Python cache, and redacted scan reports.
+/.tools/
+__pycache__/
+*.pyc
+gitleaks-report.*
