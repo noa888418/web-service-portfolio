@@ -2,11 +2,15 @@
 
 ## プロジェクトの決定事項と現在の範囲
 
-React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actions の使用は決定済みです。AWS 月額予算は 3,000 円、月 60 時間程度の事前案内期間のみ公開し、独自ドメインは未所有です。
+React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsの使用は決定済みです。AWS月額予算は3,000円、構築から撤去まで月60時間程度、公開は事前案内期間のみ。独自ドメインは未所有です。
 
 現在導入・確認済みなのは下記の秘密情報検査環境です。Node / PHP / Composer / Laravel / Terraform 等の導入、Docker によるアプリ起動、AWS リソース作成は今回行っていません。バージョン・lock・追加検査ツールは実装段階で決めます。Python は検査補助用であり、バックエンドは Laravel です。
 
 AWS のサブネット・SG・Cookie セッション・キャッシュ・OIDC・撤去は [基本設計案](architecture.md)、公式料金と構築・検証・撤去を含む 60 時間の試算は [費用見積もり](costs.md)を参照してください。調査済みの仕様と実機での検証済み事項を区別します。
+
+今回のDB・API・4画面の案は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、FR/ACの対応・A/B/X/Yの机上確認・検証区分は [design-review.md](design-review.md)です。未承認の業務詳細を実装前にレビューし、DB制約とPostgreSQLの別接続による並行処理試験を計画します。アプリのテストは未実施です。
+
+運用前提は架空データ専用、構築・検証6時間/公開48時間/閉鎖・保存・撤去等6時間（初月は検証に応じ公開短縮）。同期間は保持、次回公開は新DBへの初期投入。snapshot取得後7日・通常最新1世代、アプリログ7日・アクセスログ30日。作成者が公開終了時の資格情報・セッション失効と削除結果確認を担当します。誤投入は期限を待たず対応し、詳細はDB文書のOPS-01～OPS-07に従います。
 
 ## 採用した方法
 
@@ -130,4 +134,6 @@ CI は取得済みの参照から到達できる履歴を対象とし、未取�
 4. 通常デプロイは既存 DB を維持する差分 migration とし、単発 ECS task で結果を確認する。`migrate:fresh` は使わない。デモデータの reset は保存対象の確認と復元手順を伴う別作業にする。
 5. 公開前に state・snapshot の保護と残り予算を確認し、公開終了時に CloudFront の閉鎖・関連付け解除・runtime 撤去・課金対象の残存を確認する。RDS 停止や ECS の task 数 0 だけで完了にしない。
 
-Cookie 認証の API 検証では適切な CSRF 値を用意し、認可拒否と CSRF 拒否を区別します。CloudFront の URL が変わる再構築では APP_URL・許可ホスト・案内 URL を更新し、以前のセッションを引き継がないことを確認します。GitHub Actions からの AWS 認証は OIDC を用いる方針案で、現時点の secret scan workflow には AWS 権限を追加していません。
+Cookie 認証の API 検証では適切な CSRF 値を用意し、認可拒否と CSRF 拒否を区別します。CloudFront の URL が変わる再構築では APP_URL・許可ホスト・案内 URL を更新し、以前のセッションを引き継がないことを確認します。同じURLでも次回公開は旧セッションと資格情報を再利用しません。GitHub Actions からの AWS 認証は OIDC を用いる方針案で、現時点の secret scan workflow には AWS 権限を追加していません。
+
+最初の実装単位は、採用バージョンとローカルPostgreSQL環境を確認したうえでのusers migration・メール正規化/一意性・役割/停止の制約検証を提案します。その後、Cookieログイン・me・logoutを一つの利用シナリオとして進めます。今回これらの実装・環境構築は行っていません。

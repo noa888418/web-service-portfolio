@@ -8,13 +8,14 @@
 
 ## 計算条件（提案）
 
-- ユーザーの公開条件は「月 60 時間程度、事前案内期間のみ」。この見積もりは依頼に沿って **構築・検証・公開・撤去完了まで合計 60 時間** とします。例は準備・検証・撤去 12 時間、利用者向け公開 48 時間。公開そのものを 60 時間確保したい場合は準備時間を加算して再計算します。
+- 2026-09-22 の設計前提：**構築・検証6時間、公開48時間、閉鎖・保存・撤去等6時間の合計60時間**。初月は検証に応じ公開を短縮します。待機・失敗・再試行も時間に含め、60時間を超える場合は公開を短縮または再見積もりします。単価は上記2026-09-21の確認結果を使用しています。
 - ALB 1 台、RDS PostgreSQL db.t4g.micro Single-AZ 1 台、gp3 20 GiB を各 60 時間。標準サポート期間内の PostgreSQL を選ぶ前提で Extended Support 料金は含めません。RDS の実データ量ではなく割当 storage を課金します。
 - ECS Fargate Linux x86_64、**1 task 合計 0.5 vCPU / 1 GiB** に Nginx と Laravel の 2 container。60 task-hour に rolling deploy の重複・migration・seed・復元検証等の追加 4 task-hour を加え、計 64 task-hour。性能検証で不足すればサイズと費用を見直します。
 - public IPv4 は通常タスク 1 個につき 1 個、計 64 address-hour。内部 ALB・非公開 RDS・CloudFront VPC origin の private ENI に public IPv4 料金を足しません。Elastic IP の固定保持はしません。
 - ALB は平均 1 LCU を 60 時間と仮定。実際は接続数・有効接続・処理 byte・rule 評価の最大次元で変動し、1 LCU が固定最低料金という意味ではありません。
 - CloudFront 配信 10 GB / 月、HTTPS 100,000 requests / 月（更新要求を含む）、origin への request body 等 0.1 GB。公開案内だけで不特定のアクセスを排除できるとは仮定しません。
 - snapshot / backup 合計 20 GB-month、ECR 保存 2 GB-month（2 image・旧版・SBOM 等）、Secrets Manager 4 secret を 1 か月保持、API 1,000 回。snapshot の複数世代合計と一時重複も実績で確認します。
+- snapshotは取得後7日・通常最新1世代、一時的な複数世代は復元検証の間だけで元の7日期限を延長しません。**バックアップ枠20 GB-month / $1.90は当面維持**します。保持短縮を理由に月額見積もり・予備費を増減せず、複数回公開や検証時の重複を実績と照合します。アプリログ7日、アクセスログ30日も保存量の想定と照合します。
 - CloudWatch Logs 取込 1 GB、平均保存 0.1 GB-month（圧縮後の仮定）、標準メトリクス alarm 2 個。S3 は state の過去 version・アクセスログ等を合計 1 GB-month、PUT / LIST 1,000 回、GET 10,000 回とします。ログ増加は予備費の対象です。
 - 月間 storage 按分は平均 730 時間で概算。実請求は月の日数・サービスの秒 / 時間の課金単位によります。Fargate の標準 20 GiB ephemeral storage 内で運用し、追加領域は使いません。
 - 為替 **160 円/USD**、消費税 **10%** を仮定します。為替は取得した実勢レートではありません。請求時の換算・決済手数料は未確定です。AWS の掲載料金は税抜であり、実際の課税は請求先条件に従います。[AWS 日本の税案内](https://aws.amazon.com/tax-help/japan/)
@@ -80,7 +81,7 @@ RDS の停止だけで月全体を安く維持する案は採りません。停�
 ## 予備費・超過要因
 
 - 為替が 180 円/USD なら同じ利用量でも **約 2,401 円**、予備費は約 599 円になります。決済手数料や請求時の丸めも余裕内で確認します。
-- 同規模の ALB・task・IPv4・RDS・gp3 と 1 LCU を 1 時間延長すると約 **17.05 円**（160 円/USD・税込、通信等を除く）。公開 60 時間に別途準備 12 時間を足すなら、約 205 円以上を加算します。
+- 同規模の ALB・task・IPv4・RDS・gp3 と 1 LCU を 1 時間延長すると約 **17.05 円**（160 円/USD・税込、通信等を除く）。合計60時間から12時間超過すれば約205円以上を加算します。初月はまず公開時間の短縮で検証時間を確保します。
 - CloudFront 配信がさらに 100 GB 増えると配信だけで約 **2,006 円**増えます。事前案内だけではアクセス増加を防げず、従量課金に支出の上限はありません。
 - task の増設・メモリ増量、再構築失敗や放置、ALB LCU の増加、RDS の CPU credit 超過（T4g PostgreSQL は $0.075/vCPU-hour）、追加 storage / snapshot、ログ大量出力、ECR の旧 image 蓄積を確認します。
 - WAF、NAT Gateway、Redis、有料 VPC Endpoint、独自ドメイン / Route 53、有料 support、customer managed KMS key、Extended Support、CloudWatch Logs Insights の検索等は初期案に含めません。追加時は先に再見積もりします。監視を無効にして予算を合わせる方針ではありません。
@@ -90,6 +91,6 @@ RDS の停止だけで月全体を安く維持する案は採りません。停�
 
 AWS Budgets で 3,000 円相当の月額予算を設定し、50%・70%・90% の実績と予測超過を通知する案です。USD / 税抜で管理する場合の上限目安は `3,000 / 160 / 1.10 ≒ $17.05`。税を含む設定との二重計上を避け、為替の想定を月初に見直します。
 
-**予算通知は支出の強制停止ではありません。** 請求反映・通知に遅延があり、通知前後に増額することがあります。通知先、公開終了・撤去の実行者、終了予定時刻を決め、公開前後に稼働リソースと累積時間を確認します。予算通知を受けて state や snapshot を一括削除する運用にはしません。[AWS Budgets の通知と遅延](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html)
+**予算通知は支出の強制停止ではありません。** 請求反映・通知に遅延があり、通知前後に増額することがあります。公開終了・撤去・削除結果確認は作成者が担当します。通知先と各回の終了予定時刻を決め、公開前後に稼働リソースと累積時間を確認します。予算通知を受けて state や snapshot を一括削除する運用にはしません。[AWS Budgets の通知と遅延](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html)
 
 本見積もりの数式はローカルで再計算していますが、AWS リソースは未作成で実測費用・性能・課金停止は未検証です。最初の短時間検証後に実績単価・量と照合し、予備費を使い切る見込みなら公開時間・構成を再検討します。

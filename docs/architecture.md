@@ -2,11 +2,21 @@
 
 ## 決定事項と提案の境界
 
-ユーザー決定：題材は社内IT依頼・改善管理サービス。React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actions を使用します。AWS 月額予算は 3,000 円、公開は月 60 時間程度の事前案内期間のみ。独自ドメインは所有していません。シフトレフト、必要最小限のベースイメージ、非 root 実行、マルチステージビルドを重視します。
+ユーザー決定：題材は社内IT依頼・改善管理サービス。React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsを使用します。AWS月額予算は3,000円、構築から撤去まで月60時間程度、公開は事前案内期間のみ。独自ドメインは所有していません。シフトレフト、必要最小限のベースイメージ、非root実行、マルチステージビルドを重視します。
 
 以下は**成立条件を調査した基本設計の提案**です。東京リージョン、CloudFront 従量課金・標準ドメイン、VPC オリジン、非公開 ALB、ECS Fargate、非公開 Single-AZ RDS、NAT Gateway・Redis なしという構成は、AWS 実機での検証・採用確定ではありません。機能・権限の詳細も [requirements.md](requirements.md) のレビュー対象のままです。
 
 公式仕様の確認日：**2026-09-21**。Terraform AWS Provider **v6.65.0** の文書を確認しました。これは調査基準であり、導入済みバージョンではありません。実装時に Terraform 本体、Provider、Laravel / PHP / Node / PostgreSQL 等の対応バージョンを固定し、lock ファイルを管理します。費用は [costs.md](costs.md) を参照してください。
+
+## 今回反映した運用前提（2026-09-22）
+
+- 架空データ専用の期間限定デモ。内部 HTTP と標準証明書の TLS 制約は下記のデモ限定例外として扱う。
+- 月60時間の目安は構築・検証6時間、公開48時間、閉鎖・保存・撤去等6時間。初月は検証に応じ公開を短縮する。
+- 同じ公開期間の再デプロイはデータ保持、次回公開は新規の空DBに初期データを投入。snapshot復元は同期間の障害対応・隔離検証用とする。
+- snapshotは取得後7日間・通常最新1世代。復元検証中だけ期限内で一時併存し、コピーや復元で元の期限を延ばさない。アプリログ7日・アクセスログ30日。バックアップ費用枠は当面維持。
+- 公開終了時はデモ資格情報・セッションを失効。削除・結果確認は作成者が担当。秘密情報の誤投入は保存期限を待たず対応する。
+
+これらは今回ユーザーが指定した設計前提です。業務詳細の採否や AWS 構成の実機検証完了を意味しません。具体的な [DB と管理手順](database.md)、[API](api.md)、[画面](screens.md)、[対応表](design-review.md)を追加しました。
 
 ## 構成・通信経路（提案）
 
@@ -81,9 +91,11 @@ ALB・RDS は public IP を持たず、RDS は `publicly_accessible=false`。外
 | Laravel → RDS | PostgreSQL TLS 5432 | `rds.force_ssl` とクライアントの `verify-full` 相当、RDS CA・ホスト名検証を設計し、実測で確認する |
 | AWS API、state 操作 | HTTPS | TLS を使い、S3 でも非 TLS のアクセスを拒否する |
 
-**内部 HTTP を許容するかは未決定です。** 非公開であることを「全区間暗号化」と表現しません。CloudFront の origin TLS は信頼された CA と一致するホスト名の証明書が必要で、自己署名証明書では代替できません。独自ドメイン未所有のまま ALB の AWS 所有 DNS 名用の証明書を発行できると仮定しません。内部 TLS 必須なら、管理できるドメイン・証明書・費用を含めて案を見直します。[origin TLS の仕様](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-https-cloudfront-to-custom-origin.html)、[RDS PostgreSQL TLS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/PostgreSQL.Concepts.General.SSL.html)
+**内部 HTTP は架空データ専用デモに限る例外として今回の設計前提にします。** 非公開であることを「全区間暗号化」と表現しません。CloudFront の origin TLS は信頼された CA と一致するホスト名の証明書が必要で、自己署名証明書では代替できません。独自ドメイン未所有のまま ALB の AWS 所有 DNS 名用の証明書を発行できると仮定しません。[origin TLS の仕様](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-https-cloudfront-to-custom-origin.html)、[RDS PostgreSQL TLS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/PostgreSQL.Concepts.General.SSL.html)
 
-Provider v6.65.0 では `cloudfront_default_certificate=true` 時に viewer の `minimum_protocol_version` を任意の TLSv1.2 ポリシーにできない制約があります。標準ドメイン HTTPS を、TLS 1.2 未満を必ず拒否する設定が完了したと説明しません。最低 TLS バージョンを厳格に制限する必要性も公開前の判断事項です。[Provider の viewer certificate 仕様](https://github.com/hashicorp/terraform-provider-aws/blob/v6.65.0/website/docs/r/cloudfront_distribution.html.markdown#viewer-certificate-arguments)
+Provider v6.65.0 では `cloudfront_default_certificate=true` 時に viewer の `minimum_protocol_version` を任意の TLSv1.2 ポリシーにできない制約があります。標準ドメイン HTTPS を、TLS 1.2 未満を必ず拒否する設定が完了したと説明しません。この制約も今回のデモ限定例外に含めます。[Provider の viewer certificate 仕様](https://github.com/hashicorp/terraform-provider-aws/blob/v6.65.0/website/docs/r/cloudfront_distribution.html.markdown#viewer-certificate-arguments)
+
+例外の理由は、独自ドメイン未所有・月3,000円・短期間の架空データ専用デモという制約で、非公開経路とSGによる限定を組み合わせるためです。残存リスクは内部の平文Cookie・本文の盗聴/改変、侵害された内部構成要素からの漏えい、viewer側の最低TLS制限が弱いことです。入口HTTPS・RDS TLS・非公開ALB・直接受信拒否・短命セッション・デモ終了時失効は維持し、例外で検査を無効化しません。**実在データの利用、常設公開、利用者拡大、最低TLSの厳格な要求、独自ドメイン取得、関連仕様の変更**のいずれかで、作成者が内部TLS・証明書・費用を再設計します。各公開前にも例外条件が続いているか確認します。
 
 ## 同一オリジンの認証・CSRF・キャッシュ
 
@@ -108,7 +120,7 @@ Laravel Sanctum の SPA Cookie セッション認証を提案します。セッ�
 - Terraform は secret の入れ物・ARN を管理する案です。実値を通常の tfvars / `secret_string` / 出力に置かず、RDS 管理資格情報の AWS 管理機能や別の安全な投入手順を選びます。`sensitive` は state を暗号化しないため、値が state に残る経路を個別に確認します。
 - S3 backend は暗号化、Block Public Access、versioning、TLS 強制、最小権限、`use_lockfile=true` を提案します。state・plan・過去バージョンは秘密情報を含むものとして扱い、PR の公開 artifact にしません。ロック操作の権限も必要です。DynamoDB ロックを新規の前提にしません。[S3 backend 仕様](https://developer.hashicorp.com/terraform/language/backend/s3)
 - S3 / ECR は標準の保存時暗号化、RDS / Secrets Manager は AWS 管理 KMS key を初期費用案とします。customer managed KMS key は別途費用・削除防止設計が必要です。バックアップを残す間は復号鍵と必要な APP_KEY を保持します。
-- アプリログは CloudWatch Logs、ALB / CloudFront のアクセスログは非公開 S3 へ保管する案です。Cookie・Authorization・パスワード・本文全文をログに出さず、URL query に秘密値を載せません。CloudFront の Cookie logging は無効、詳細ログのフィールド・マスキングを設計します。保存期間はアプリログ 7 日、アクセスログ 30 日を提案し、権限と lifecycle を別途レビューします。
+- アプリログは CloudWatch Logs、ALB / CloudFront のアクセスログは非公開 S3 へ保管する案です。Cookie・Authorization・パスワード・本文全文をログに出さず、URL query に秘密値を載せません。CloudFront の Cookie logging は無効、詳細ログのフィールド・マスキングを設計します。保存期間は今回の前提でアプリログ7日、アクセスログ30日。作成者が期限削除・実際の残存を確認し、権限と lifecycle は実装前にレビューします。
 
 ## OIDC と変更・検査の流れ
 
@@ -141,12 +153,12 @@ Terraform plan、apply、ECR push / ECS deploy、データ操作は権限を分�
 公開・撤去は次の順に行う案です。
 
 1. **準備**：当月の実績・残り時間・予備費を確認。schema / Provider / image digest と保存対象 snapshot を決める。edge は無効・停止用 origin の状態を保つ。
-2. **構築・復元**：runtime を作成し、RDS を空から作るか指定 snapshot から復元。DB の secret・接続先・SG・CA を照合。初回データ投入と通常の schema 更新を別のジョブにする。
+2. **構築**：次回公開はruntimeと新規の空DBを作成する。同じ公開期間の再デプロイでは既存DBを維持。snapshot復元は障害対応・隔離検証だけに使う。DB の secret・接続先・SG・CA を照合。初回データ投入と通常の schema 更新を別のジョブにする。
 3. **検証・案内**：単発 task で `php artisan migrate --force` による差分 migration を行い、終了コード・DB の状態を確認。通常デプロイで **`migrate:fresh` は使わない**。バックエンドと SG を確認後、VPC origin を関連付け、検証時間内に CloudFront を有効化して Deployed を待つ。実際の公開経路で正常系・権限違反・HTTPS・CSRF・キャッシュを確認してから、利用開始と閉鎖時間を案内する。検証中のデモ資格情報は検証者だけに渡す。
-4. **公開終了**：書込受付を停止し、進行中の処理を終える。CloudFront を無効化し、全 behavior を停止用 S3 origin へ向け、VPC origin の関連付けを外す。Deployed と外部からの閉鎖を確認する。無効化の伝播時間を見込んで作業を開始する。
-5. **保存**：RDS の最終 snapshot を作り Available を確認。復元テスト済み世代を維持し、snapshot ID・DB engine・schema・image digest・secret / key の参照を秘密値なしで台帳に記録。必要なログも保存対象を確認する。
+4. **公開終了**：書込受付を停止し、進行中の処理を終える。CloudFront を無効化し、全 behavior を停止用 S3 origin へ向け、VPC origin の関連付けを外す。Deployed と外部からの閉鎖を確認後、DBの全利用者停止・auth_version更新・全セッション削除、デモ資格情報の配布停止・ローテーションを行う。無効化の伝播時間を見込んで作業を開始する。
+5. **保存**：RDS の最終 snapshot を作り Available を確認。取得完了時刻・7日後の削除期限・snapshot ID・DB engine・schema・image digest・secret / key の参照を秘密値なしで台帳に記録。通常最新1世代、復元検証中の一時併存も各世代の元の7日期限内とする。必要なログも保存対象を確認する。
 6. **撤去**：レビュー済み plan で RDS の deletion protection を意図的に解除して runtime を削除。snapshot が残ることを明示し、VPC origin → ALB の依存順も守る。ECS desired count=0 だけで終了せず、ALB・RDS・public IPv4 の残存を確認する。
-7. **再構築**：復元先は新しい DB instance になる。最新接続先を注入し、復元されたセッションをすべて破棄して migration・疎通・権限・データ件数を確認する。復元を検証する前に前世代 snapshot を削除しない。
+7. **障害復元・削除確認**：復元先は新しい DB instance になる。最新接続先を注入し、復元されたセッションをすべて破棄、auth_version更新・旧デモ資格情報のローテーションを行う。閉鎖した状態でmigration・疎通・権限・件数を確認してから、同期間に再公開するときだけ有効化する。旧snapshotは復元確認まで一時保持するが7日期限を超えない。間に合わなければ復元未確認を記録し期限削除する。期限削除・残存確認の責任者は作成者。
 
 通常 migration でも不可逆な変更があり得るため、事前 snapshot と互換性を確認し、アプリのロールバックだけで DB が戻るとは扱いません。[Laravel migrations](https://laravel.com/docs/13.x/migrations)、[RDS snapshot 復元](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_RestoreFromSnapshot.html)
 
@@ -160,12 +172,12 @@ Distribution を保持すれば標準ドメインを維持しやすい一方、D
 
 投入条件は「専用 demo 環境、許可された DB、明示的な実行許可、架空データ、初期化可能な状態」。欠ければ拒否します。通常のアプリ起動や deployment では seed を自動実行しません。実業務環境では APP_ENV の文字列にかかわらず拒否します。従来 AC-17 の『本番向け環境ではデモ投入拒否』は production 実行設定と用途が混同されるため、この条件に修正します。デモ資格情報は Secrets Manager で供給し、ソースに共通パスワードを置きません。
 
-保存案：架空データの DB snapshot を最大 30 日・最新 1 世代を基本にし、復元確認中は前世代も保持。期間内の入力を引き継ぐか、次回デモを初期状態へ戻すかは未決定です。引き継ぐ場合は必要な鍵・資格情報との整合も保ちます。リセットは通常デプロイと分離し、保存対象の確認後だけ行います。実在データの取り扱い、削除実行者、snapshot / backup からの削除反映は運用開始前に決めます。
+保存方針は冒頭の今回前提と [DB管理手順OPS-01～OPS-07](database.md)に具体化しました。次回公開は初期状態、同期間の再デプロイは保持、snapshotは取得後7日です。誤投入した秘密情報は期限を待たず失効・影響調査・liveデータと汚染snapshot/ログの除去を行います。snapshotの部分編集はできないため、汚染世代を復元元から外します。state・復号鍵を一括削除せず、保存対象の残存と削除結果を作成者が確認します。
 
 ## 実装前に残る判断・検証
 
-- 内部 HTTP と標準証明書の TLS 制約の許容、公開デモのアクセス制限。URL を事前案内するだけでは閲覧者制限にならないため、デモ資格情報の配布・失効とログイン試行制限を決める。
+- 公開デモ資格情報の配布経路とAPI設計の認証期限・試行制限値のレビュー。内部HTTP/TLS例外の条件継続を公開前に確認する。URLの事前案内だけでは利用者制限にならない。
 - 0.5 vCPU / 1 GiB のタスク、db.t4g.micro / gp3 20 GiB の性能とメモリ余裕。Single-AZ・単一タスクの停止許容、使用時間・アクセス量の上限。
-- seed の明示許可、データを引き継ぐか、保存期間・削除実行者。Provider の依存順、AZ・SG・Cookie・cache・復元を小さな実機検証で確かめる。
+- seedの明示許可・DB照合の具体的なジョブ実装。Providerの依存順、AZ・SG・Cookie・cache・7日保持と復元・失効を小さな実機検証で確かめる。保存方針と作成者責任は今回の前提として反映済み。
 
 本書で行ったのは仕様調査と設計です。Terraform validate / plan / apply、AWS 疎通、実アプリの認証・CSRF・復元検証はすべて未実施です。
