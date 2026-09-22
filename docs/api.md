@@ -2,6 +2,8 @@
 
 ## 状態・共通契約
 
+usersの保存設計は採用・ローカル検証済みです。ただし本書の認証・HTTP APIは今回の対象外で、期限・試行制限・エラー・認可などの詳細は引き続き提案です。is_activeを保存できることは、停止者のログイン拒否・セッション失効を保証しません。[開発記録](development.md)を参照してください。
+
 2026-09-22 作成。[要件](requirements.md)を具体化する提案です。API・認可・セッション処理は未実装、テスト未実施です。[DB](database.md)がコード・型の定義元、[画面](screens.md)が呼出元、[横断対応表](design-review.md)が FR / AC の追跡先です。JWT、一般会員登録、編集・削除、役割変更 API は提供しません。FR-09 は DB 文書の OPS-02 / OPS-03 へ対応付けます。
 
 同一オリジンの JSON API と Laravel Sanctum の Cookie 認証を提案します。SPA は `Accept: application/json`、body がある場合 `Content-Type: application/json` を送り、Cookie を同一オリジンへ送信します。ID は正の bigint 範囲内の数字文字列、先頭ゼロなし。path の不正 ID は 404、body の不正 ID は 422。version は 1～2147483647 の JSON 整数です。日時は UTC の RFC 3339（小数 6 桁 + Z）、表示は JST。種別・役割・状態は [DB の共通表現](database.md)と同じ英字コードです。

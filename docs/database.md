@@ -2,7 +2,16 @@
 
 ## 状態・参照
 
-2026-09-22 作成。[要件](requirements.md)の FR-01～FR-09 を具体化する**レビュー対象の設計案**であり、migration・アプリ・DB テストは未実施です。今回指定されたデモ運用前提は [基本設計](architecture.md)に反映し、業務仕様の承認とは区別します。[API](api.md)、[画面](screens.md)、[対応表と設計レビュー](design-review.md)と合わせて参照してください。
+2026-09-22 作成・更新。[要件](requirements.md)の FR-01～FR-09 を具体化する設計です。**usersの保存設計のみ今回の実装前提として採用**し、migration・モデル・正規化・実PostgreSQLの制約テストを実装しました。認証処理、依頼・コメント・管理投入などの詳細は引き続きレビュー対象の提案です。デモ運用前提は [基本設計](architecture.md)、実行手順・採用版・検証記録は [開発環境](development.md)を参照してください。[API](api.md)、[画面](screens.md)、[対応表と設計レビュー](design-review.md)と合わせて参照します。
+
+### 今回の採用範囲とLaravel標準との差分
+
+- usersのカラム・NOT NULL / UNIQUE / CHECK・部分index、IDの文字列表現、メール正規化と形式検証、ハッシュ・JSON非公開までを採用。is_active / auth_versionは保存だけを実装し、停止処理・ログイン拒否・失効は未実装です。他の業務表・APIの承認に広げません。
+- [users migration](../backend/database/migrations/2026_09_22_000001_create_users_table.php) はPostgreSQL専用DDLです。Laravelの標準的なid採番やtimestampsへ置き換えず、identity / timestamptz(6) / CHECKをそのまま検証しました。SQLite代替は使いません。
+- [Userモデル](../backend/app/Models/User.php) は永続化専用のEloquentモデルです。認証用Authenticatable・remember_token・email_verified_at・password_reset_tokens・sessions・cache・queue・token表はまだ追加していません。全mass assignmentを拒否し、管理処理が明示的に属性を設定する形です。将来のAPIは別途認可と入力検証を行います。
+- **管理表migrationsの設計差分**：Laravel13の標準repositoryが作るserial相当のinteger PK / migration varchar(255) / batch integerを使用し、提案したidentity・batch > 0 CHECKは今回追加しません。業務IDではなく内部適用履歴であり、フレームワーク互換を優先するためです。usersのidentity制約は変更しません。
+- メールは [EmailNormalizer](../backend/app/Support/EmailNormalizer.php)（前後Unicode空白除去・ASCII小文字化）と [EmailAddressValidator](../backend/app/Support/EmailAddressValidator.php)（ASCII・254上限・形式）を分け、モデルから順に利用します。将来のlogin / seedでも同じ順で呼ぶ前提です。DBは形式全般の検証・自動修正を行わず、正規化されていない値をCHECKで拒否します。example.test限定はデモ投入処理の追加条件案で、汎用正規化へ混ぜません。
+- DBはハッシュの暗号学的妥当性まで保証しません。モデルのLaravel hashed castを通す管理書込とDB権限の分離が必要です。現行ローカルのDB所有roleはmigration検証用で、公開用Web権限を完成させたものではありません。
 
 ## ER 図と責務
 
@@ -76,7 +85,7 @@ erDiagram
 
 `UNIQUE(id, role)` も設け、担当者の複合 FK の参照先にします。メールは初期投入とログインで同じ処理（前後空白除去 → ASCII の小文字化 → メール形式検証）を行います。デモアカウントは ASCII の `example.test` ドメインに限定する案です。国際化メール・メール到達性確認は対象外。DB の UNIQUE は正規化済み値に対して効かせ、重複は seed 全体をロールバックします。アプリの事前重複確認だけに依存しません。
 
-パスワードは Laravel Hash の Argon2id を提案します（PHP 対応と負荷は未検証）。既存のログイン上限 128 コードポイントを bcrypt の byte 上限で黙って切り詰めないためです。初期資格情報は公開期間ごとに外部で生成する十分な長さのランダム値（案：20 文字以上）とし、Hash のコストは実機計測後に固定します。初期投入の再実行で再ハッシュ・上書きしません。remember me は提供せず `remember_token` は不要です。
+パスワードは Laravel Hash の **Argon2idをusers実装で採用**しました。PHP8.4.25で128文字の日本語を切り詰めず照合できることを検証済みです。ローカルのmemory=65536 KiB / time=4 / threads=1は検証用設定で、Fargateでの性能・メモリ余裕は未検証です。初期資格情報は公開期間ごとに外部生成するランダム値（案：20文字以上）とし、公開時のコストは実機計測後に決めます。初期投入の再実行で再ハッシュ・上書きしません。remember meは提供せずremember_tokenは不要という認証案を維持します。
 
 ## service_requests
 
@@ -112,7 +121,7 @@ DB は「対応開始後の担当者あり」と「担当者の役割」を保�
 
 ## 管理テーブル
 
-Laravel 標準構成との照合は採用バージョン決定時に行います。以下は必要なカラムまで定義した案で、生成済み migration ではありません。
+以下は管理表の設計案です。今回実際に作成するのはLaravel標準のmigrationsだけで、標準との構造差は冒頭に記録しました。その他の管理表は未実装です。
 
 | テーブル | カラム（型 / NULL / 既定）・制約 | 用途・インデックス |
 | --- | --- | --- |
@@ -183,6 +192,6 @@ PostgreSQLのFOR SHAREにも対象表の少なくとも1列のUPDATE権限が必
 
 ## 根拠と未検証事項
 
-2026-09-22 に [PostgreSQL 制約](https://www.postgresql.org/docs/current/ddl-constraints.html)、[行ロック](https://www.postgresql.org/docs/current/explicit-locking.html)、[分離レベル](https://www.postgresql.org/docs/current/transaction-iso.html)、[Laravel Session](https://laravel.com/docs/13.x/session)、[Cache](https://laravel.com/docs/13.x/cache)、[Hashing](https://laravel.com/docs/13.x/hashing)を参照しました。文書の参照版は製品の採用バージョン確定を意味しません。独自の列・制約・タイムアウトは本サービスの提案です。
+2026-09-22 に [PostgreSQL 制約](https://www.postgresql.org/docs/current/ddl-constraints.html)、[行ロック](https://www.postgresql.org/docs/current/explicit-locking.html)、[分離レベル](https://www.postgresql.org/docs/current/transaction-iso.html)、[Laravel Session](https://laravel.com/docs/13.x/session)、[Cache](https://laravel.com/docs/13.x/cache)、[Hashing](https://laravel.com/docs/13.x/hashing)を参照しました。ローカル採用版はLaravel13 / PostgreSQL18です。users以外の独自列・制約・タイムアウト・運用手順は本サービスの提案です。
 
-実 PostgreSQL での FK / CHECK / UNIQUE、2 接続による競合・commit 順、session 保存と停止、database cache lock、rollback の検証は [横断検証計画](design-review.md)に分離しました。SQLite の単体テストで同等とみなさず、すべて今後実施します。
+usersの実PostgreSQLでのCHECK / UNIQUE / NOT NULL、UNIQUE(id, role)への複合参照、既定値・停止状態の保存、migration再実行・他データの保持を確認しました。依頼・コメントのFK、2接続による競合・commit順、session保存と停止、cache lock、seedの検証は [横断検証計画](design-review.md)の未実施項目です。usersの成功をFR / AC全体の合格にしません。

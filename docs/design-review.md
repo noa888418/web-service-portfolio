@@ -1,6 +1,6 @@
 # DB・API・画面の横断設計レビュー
 
-2026-09-22。これは机上の対応確認と今後の検証計画です。**アプリ / PostgreSQL / AWS のテストはすべて未実施**です。業務詳細は引き続き提案とし、今回指定された運用前提だけを確定した設計前提として扱います。[要件](requirements.md)、[DB](database.md)、[API](api.md)、[画面](screens.md)、[セキュリティ](security.md)を参照してください。
+2026-09-22。机上の対応確認と検証計画に、users実装の結果を追記しました。**usersの保存設計だけを採用し、実PostgreSQLの制約テストを実施済み**です。認証・API・画面・依頼・コメント・AWSは未実装 / 未検証で、業務詳細は引き続き提案です。[要件](requirements.md)、[DB](database.md)、[API](api.md)、[画面](screens.md)、[セキュリティ](security.md)を参照してください。
 
 ## FR → 画面 → API / 管理手順 → テーブル
 
@@ -81,8 +81,9 @@ ID 例は A=1、B=2、X=3、Y=4。以下は実行結果ではなく、設計に�
 | 区分 | 検証内容 | 今回の状態 |
 | --- | --- | --- |
 | 文書 | リンク、FR9件/AC19件の対応、API12件/画面4件/OPS7件、コード・権限・全遷移、例のJSON、既存差分・秘密情報検査 | 今回の確認対象。実行結果は作業報告に記録 |
+| users / 実PostgreSQL | 空schemaへのmigration、役割2種、正規化・一意性、直接INSERTのCHECK / NOT NULL、既定値・停止状態、UNIQUE(id, role)参照、JSON非公開、接続先ガードと再実行の保全 | 62テスト・101アサーション成功。[開発記録](development.md)。FR-01 / FR-09の保存基盤のみ、AC全体の合格ではない |
 | Laravel / React | Policy全組合せ、保護項目、入力境界、401/403/404/409/419/422/429、期限・停止、error整形、二重操作、画面遷移・keyboard / focus / XSS | 未実施、アプリ実装後 |
-| 実 PostgreSQL | UNIQUEメール正規化競合、複合FK・CHECK・NULL、子削除、DDL互換、同一snapshotの件数、2接続のversion更新・投稿対完了・利用者停止、deadlock/timeout rollback、cache原子性・session同時保存、seed同時実行/途中失敗/no-op | 未実施。採用版 PostgreSQL で別接続・同期点を使い両順序を確かめる。sleep頼み・SQLite代替にしない |
+| 実 PostgreSQL（残り） | 同時INSERTのメール競合、依頼・コメントの複合FK / CHECK / NULL・子削除、同一snapshotの件数、2接続のversion更新・投稿対完了・利用者停止、deadlock/timeout rollback、cache原子性・session同時保存、seed同時実行/途中失敗/no-op | 未実施。採用版 PostgreSQL で別接続・同期点を使い両順序を確かめる。sleep頼み・SQLite代替にしない |
 | ローカル結合 | 同一オリジンCookie / CSRF / logout、複数ブラウザーA/B、API非キャッシュヘッダー、通信切断で結果不明時の非再送 | 未実施、アプリと開発環境が必要 |
 | AWS 実機 | CloudFront標準TLSとorigin経路、Cookie/Header転送、A/Bのcache混在なし、SG直アクセス拒否、proxy/IP/HTTPS判定、RDS TLS、OIDC、秘密注入、snapshot復元と7日削除、閉鎖・失効・課金対象撤去、メモリ/ハッシュ負荷 | 未実施。ローカルDBテストでは代替できない |
 
@@ -91,7 +92,7 @@ AC-19 は Laravel の no-store 単体確認だけで合格にしません。Acti
 ## 重要な未決定事項と最初の実装単位
 
 1. **業務案の採否**：社員だけの登録、IT全員の担当外操作・完了判断、編集/削除/再開なし、入力上限をレビューする。
-2. **認証と公開の詳細**：提案した期限・試行制限値・資格情報の配布経路、対応バージョン、単一taskの性能を確定・検証する。
+2. **認証と公開の詳細**：提案した期限・試行制限値・資格情報の配布経路、公開用の対応版、単一taskの性能を確定・検証する。ローカルのPHP / Laravel / PostgreSQL / PHPUnitは選定済み。
 3. **リリース条件**：依存関係/イメージ/IaC検査のツールと停止基準、必要なCI必須チェック、予算通知先を決める。
 
-最初の小さな実装単位案は **users の migration と正規化・役割・停止の制約検証**です。先に対応バージョンとローカル PostgreSQL の検証環境を決め、2つの正規化メールが重複しないこと、NULL/不正roleの拒否、停止・auth_versionの表現を確認します。ここでは公開APIやAWSまで広げず、その後 FR-01 / FR-02 の Cookie ログイン・me・logout へ進みます。今回はこの実装も行っていません。
+最初の小さな実装単位である **users migration・正規化・役割・停止の保存検証**は実施済みです。レビュー単位は①Docker / Laravel / 専用DBガード、②users / メール処理 / PHPUnit、③users CI / 文書とします。DB管理表migrationsの標準構造との差と、認証モデルをまだ導入しない理由は [DB文書](database.md)に記録しました。次は期限・失効・試行制限の案を確認し、FR-01 / FR-02 のCookieログイン・me・logoutへ進みます。

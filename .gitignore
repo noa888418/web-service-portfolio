@@ -39,3 +39,10 @@ credentials.json
 __pycache__/
 *.pyc
 gitleaks-report.*
+
+# Laravel dependencies and generated runtime files.
+/backend/vendor/
+/backend/bootstrap/cache/*.php
+/backend/storage/**
+!/backend/storage/.gitignore
+/backend/.phpunit.cache/

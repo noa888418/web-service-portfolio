@@ -137,7 +137,7 @@ Terraform plan、apply、ECR push / ECS deploy、データ操作は権限を分�
 | Terraform | fmt、validate、Provider lock、IaC 検査、plan で public DB・過剰 SG・権限・暗号化・destroy 対象を確認。予算見積もりも再計算 |
 | 公開前 | HTTPS、Cookie / CSRF / 非キャッシュ、ALB / ECS / DB 直アクセス拒否、復元、公開終了時の閉鎖を検証 |
 
-依存関係・イメージ・IaC 検査ツール（例：Trivy 等）と停止基準、テストのバージョンは未選定です。検査エラー・未実施・検出を握りつぶさず、critical / high の扱いや期限付きの誤検知除外を導入前に決めます。既存の Actions 初回 push 成功は利用者確認済みであり、ここに挙げた追加検査の成功を意味しません。
+ローカルのusers検証にはPHPUnit13とComposer auditを採用しました（[採用版・検証記録](development.md)）。イメージ・IaC検査ツール（例：Trivy等）と停止基準は未選定です。検査エラー・未実施・検出を握りつぶさず、critical / highの扱いや期限付きの誤検知除外を導入前に決めます。既存のActions初回push成功は利用者確認済みであり、追加したusers workflowのGitHub実行成功を意味しません。RDSを含むAWS配置は未構築です。
 
 ## 常設と期間限定の分離・公開運用（提案）
 

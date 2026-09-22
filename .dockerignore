@@ -1,0 +1,12 @@
+**
+!docker/
+!docker/php/
+!docker/php/Dockerfile
+!backend/
+!backend/**
+backend/vendor
+backend/.env*
+backend/storage/**
+backend/bootstrap/cache/*.php
+backend/.phpunit.cache
+!backend/storage/.gitignore

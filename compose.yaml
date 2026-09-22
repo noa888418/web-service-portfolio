@@ -1,0 +1,101 @@
+name: it-requests-local
+
+x-app: &app
+  image: it-requests-php:local
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+    target: local
+  user: "10001:10001"
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+
+services:
+  app:
+    <<: *app
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?Run scripts/setup_local.py}
+      DB_CONNECTION: pgsql
+      DB_HOST: dev-db
+      DB_PORT: "5432"
+      DB_DATABASE: portfolio_dev
+      DB_USERNAME: portfolio_dev
+      DB_PASSWORD: ${DEV_DB_PASSWORD:?Run scripts/setup_local.py}
+    networks: [development]
+    depends_on:
+      dev-db: {condition: service_healthy}
+
+  test:
+    <<: *app
+    profiles: [test]
+    environment:
+      APP_ENV: testing
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:?Run scripts/setup_local.py}
+      DB_CONNECTION: pgsql
+      DB_HOST: test-db
+      DB_PORT: "5432"
+      DB_DATABASE: portfolio_test
+      DB_USERNAME: portfolio_test
+      DB_PASSWORD: ${TEST_DB_PASSWORD:?Run scripts/setup_local.py}
+    command: ["php", "vendor/bin/phpunit"]
+    networks: [testing]
+    depends_on:
+      test-db: {condition: service_healthy}
+
+  composer:
+    profiles: [tools]
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: tooling
+    user: "10001:10001"
+    volumes:
+      - ./backend:/app
+
+  dev-db:
+    image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    environment:
+      POSTGRES_DB: portfolio_dev
+      POSTGRES_PASSWORD: ${LOCAL_PG_ADMIN_PASSWORD:?Run scripts/setup_local.py}
+      APP_DB_USER: portfolio_dev
+      APP_DB_PASSWORD: ${DEV_DB_PASSWORD:?Run scripts/setup_local.py}
+    volumes:
+      - dev_data:/var/lib/postgresql
+      - ./docker/postgres/init.sh:/docker-entrypoint-initdb.d/10-app.sh:ro
+    networks: [development]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d portfolio_dev"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  test-db:
+    image: postgres:18-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    profiles: [test]
+    environment:
+      POSTGRES_DB: portfolio_test
+      POSTGRES_PASSWORD: ${LOCAL_PG_ADMIN_PASSWORD:?Run scripts/setup_local.py}
+      APP_DB_USER: portfolio_test
+      APP_DB_PASSWORD: ${TEST_DB_PASSWORD:?Run scripts/setup_local.py}
+    tmpfs:
+      - /var/lib/postgresql
+    volumes:
+      - ./docker/postgres/init.sh:/docker-entrypoint-initdb.d/10-app.sh:ro
+    networks: [testing]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d portfolio_test"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  dev_data:
+
+networks:
+  development:
+    internal: true
+  testing:
+    internal: true
