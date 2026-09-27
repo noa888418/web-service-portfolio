@@ -99,7 +99,7 @@ Provider v6.65.0 では `cloudfront_default_certificate=true` 時に viewer の 
 
 ## 同一オリジンの認証・CSRF・キャッシュ
 
-Laravel Sanctum の SPA Cookie セッション認証を提案します。セッションは PostgreSQL に保存し、Redis やコンテナのローカルファイルに依存しません。ログインでセッション ID を更新し、ログアウトで失効・CSRF トークンを更新します。アプリの認可は [security.md](security.md) の APP-SEC-01～08 と各 API のサーバー側検査で行います。
+Laravel SanctumのCookieセッション認証は2026-09-27に採用し、ローカルの認証4 APIを実装・検証しました。セッションはPostgreSQLに保存し、Redisやコンテナのローカルファイルに依存しません。ログインでセッションIDを更新し、ログアウトで失効・CSRFトークンを更新します。無操作30分・絶対8時間、試行制限と排他の詳細は [認証実装](authentication.md)を参照してください。以下のCloudFront・HTTPS・proxy経路は未実装・未検証です。業務APIの認可は [security.md](security.md) のAPP-SEC-01～08と各APIのサーバー側検査で行う案です。
 
 セッション Cookie は `Secure`、`HttpOnly`、`SameSite=Lax`、`Path=/`、Domain 未指定の host-only を基本案とします。`.cloudfront.net` 全体を Domain に設定しません。XSRF 用 Cookie はクライアントが読む必要があるため HttpOnly にはせず、資格情報本体と区別します。SPA が `/sanctum/csrf-cookie` を取得し、URL decode した `XSRF-TOKEN` を `X-XSRF-TOKEN` ヘッダーでログイン・ログアウト・更新要求に付けます。CSRF を解除せず、不足・不一致は 419 として再認証を案内します。[Sanctum の SPA 認証](https://laravel.com/docs/13.x/sanctum)
 
@@ -180,4 +180,4 @@ Distribution を保持すれば標準ドメインを維持しやすい一方、D
 - 0.5 vCPU / 1 GiB のタスク、db.t4g.micro / gp3 20 GiB の性能とメモリ余裕。Single-AZ・単一タスクの停止許容、使用時間・アクセス量の上限。
 - seedの明示許可・DB照合の具体的なジョブ実装。Providerの依存順、AZ・SG・Cookie・cache・7日保持と復元・失効を小さな実機検証で確かめる。保存方針と作成者責任は今回の前提として反映済み。
 
-本書で行ったのは仕様調査と設計です。Terraform validate / plan / apply、AWS 疎通、実アプリの認証・CSRF・復元検証はすべて未実施です。
+本書のAWS構成は仕様調査と設計までです。Terraform validate / plan / apply、AWS疎通・公開経路の認証/CSRF・復元検証は未実施です。認証APIのローカルHTTP検証は [開発記録](development.md)に分けて記載します。

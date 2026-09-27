@@ -2,11 +2,11 @@
 
 ## 状態・共通契約
 
-usersの保存設計は採用・ローカル検証済みです。ただし本書の認証・HTTP APIは今回の対象外で、期限・試行制限・エラー・認可などの詳細は引き続き提案です。is_activeを保存できることは、停止者のログイン拒否・セッション失効を保証しません。[開発記録](development.md)を参照してください。
+2026-09-27にFR-01・FR-02の認証方針を採用し、API-01～API-04を実装しました。Sanctum Cookie認証、PostgreSQL session、無操作30分・絶対8時間、正規化メール5回/IP30回（各60秒）です。停止者拒否・auth_version・失効・CSRFを実HTTPで検証します。[認証の実装・検証記録](authentication.md)と[開発手順](development.md)を参照してください。API-05以降の業務仕様は提案・未実装のままです。
 
-2026-09-22 作成。[要件](requirements.md)を具体化する提案です。API・認可・セッション処理は未実装、テスト未実施です。[DB](database.md)がコード・型の定義元、[画面](screens.md)が呼出元、[横断対応表](design-review.md)が FR / AC の追跡先です。JWT、一般会員登録、編集・削除、役割変更 API は提供しません。FR-09 は DB 文書の OPS-02 / OPS-03 へ対応付けます。
+2026-09-22 作成、09-27認証部分を更新。[DB](database.md)がコード・型の定義元、[画面](screens.md)が呼出元、[横断対応表](design-review.md)がFR / ACの追跡先です。JWT、一般会員登録、編集・削除、役割変更APIは提供しません。FR-09はDB文書のOPS-02 / OPS-03へ対応付けます。
 
-同一オリジンの JSON API と Laravel Sanctum の Cookie 認証を提案します。SPA は `Accept: application/json`、body がある場合 `Content-Type: application/json` を送り、Cookie を同一オリジンへ送信します。ID は正の bigint 範囲内の数字文字列、先頭ゼロなし。path の不正 ID は 404、body の不正 ID は 422。version は 1～2147483647 の JSON 整数です。日時は UTC の RFC 3339（小数 6 桁 + Z）、表示は JST。種別・役割・状態は [DB の共通表現](database.md)と同じ英字コードです。
+同一オリジンのJSON APIとLaravel SanctumのCookie認証を採用します。SPAは `Accept: application/json`、bodyがある場合 `Content-Type: application/json` を送り、Cookieを同一オリジンへ送信します。IDは正のbigint範囲内の数字文字列、先頭ゼロなし。業務APIの不正path IDは404、bodyの不正IDは422、versionは1～2147483647のJSON整数という案を維持します。日時はUTCのRFC 3339（小数6桁+Z）、表示はJST。種別・役割・状態は [DBの共通表現](database.md)と同じ英字コードです。
 
 全成功・失敗応答に `Cache-Control: private, no-store` を付けます（204 も対象）。CloudFront は default の CachingDisabled と AllViewer、エラーの最小 TTL も設定可能なものは 0。[基本設計](architecture.md)の通り API の失敗を SPA の HTML / 200 に置き換えません。CORS の広い許可、localStorage の認証情報、service worker による API 保存は使いません。
 
@@ -16,13 +16,13 @@ usersの保存設計は採用・ローカル検証済みです。ただし本書
 
 - 初回は API-01 → API-02 → API-04。XSRF-TOKEN Cookie を URL decode して、POST / PATCH の `X-XSRF-TOKEN` へ送信。CSRF Cookie だけで認証済みとは扱わない。ログイン・ログアウトにも CSRF 検査を適用する。
 - セッション Cookie は Secure / HttpOnly / SameSite=Lax / Path=/ / Domain 未指定。XSRF 用だけ JS から読める HttpOnly=false。公開環境の HTTPS 情報・trusted proxy の設定は基本設計に従う。
-- database session、**無操作 30 分・ログインから絶対 8 時間**を案とする。payloadにauthenticated_at・last_authenticated_activity_at・認証時のauth_versionを保存。保護API成功時に後者の活動時刻だけ更新し、絶対期限は延長しない。Laravel標準のlast_activityだけで成功時刻を表せると仮定せず、追加middlewareで両期限を検査する。自動ポーリングは行わず、毎回 users の is_active / auth_version と照合する。
+- database session、**無操作30分・ログインから絶対8時間**を採用。payloadにauthenticated_at・last_authenticated_activity_at・認証時のauth_versionを保存。保護APIの2xx成功時に活動時刻だけ更新し、絶対期限は延長しない。経過が1800秒 / 28800秒に達した時点で拒否。Laravel標準last_activityは保存・清掃用と区別し、毎回usersのis_active / auth_versionと照合する。CSRF取得や失敗応答では認証活動時刻を更新しない。
 - ログイン成功時は session ID を更新し、旧 ID を無効化。ログアウトは現セッションを破棄・CSRF 更新。アカウント停止・公開終了は全セッションを失効させる。失効済み / 不存在 / 停止アカウントの保護要求は共通 401。期限切れデータ清掃の実行を待って拒否する設計にしない。
-- 同一 session の読み書きとログアウト競合を防ぐため、API-01～API-12 の session 使用ルートを database cache の atomic lock で直列化する案。保持 30 秒・待機 5 秒、アプリ要求の強制終了を 20 秒以内に設定する条件で検証する。session の保存完了までロックを維持し、期限切れ前に処理を終える。ロック失敗は 503、成功扱いしない。異なる session の業務競合は DB の親行ロックで処理する。
-- ログインは**正規化メール単位 5 回 / 60 秒、信頼できる送信元 IP 単位 30 回 / 60 秒**を案とする。最初の試行から60秒の固定windowとし、成功も数え、成功時にcounterをリセットしない。どちらか超過で429、Retry-Afterを整数秒で返す。不存在・停止メールも同じ枠・同じ401文面で処理する。DB cacheを全taskで共有し、keyはメール/IPをそのまま保存せず用途別HMACとする。各枠の判定・加算は同じkeyの短時間lock内で原子的に行い、次の処理へ進む前に解放する。外部X-Forwarded-Forをそのまま信頼しない。
+- API-01～API-04はセッション読取前から保存・commitまでPostgreSQLのtransaction advisory lockで直列化する。**旧案の30秒lease / 20秒強制終了条件は採用しない**。CLIでは要求全体の20秒強制終了を保証できず、leaseだけ切れると古い保存が復活するため。競合時の取得待機は単調時計で最大約5秒、失敗503。ロック自体はtransaction終了まで期限切れしない。DB SQL待機設定と実測の範囲、残存リスクは [認証設計](authentication.md)に記録。API-05以降の導入時も同じ順序を守る案とする。
+- ログインは**正規化メール単位5回/60秒、信頼できる送信元IP単位30回/60秒**を採用。最初の試行から60秒の固定window、成功も加算し成功時にリセットしない。IP枠超過なら先に429、それ以外はメール枠超過で429、該当windowの残秒を整数Retry-Afterで返す。不存在・停止も同じ枠・同じ401文面。DB cacheのkeyは用途別HMACでメール/IPを平文保存しない。判定・加算はPostgreSQL transaction lockで原子的にする。IPは独立transactionでCSRF前に確定、メールはsession transaction終了時に確定・lock解放する実装へ調整した（nested transactionは外側commitまでlockを保持するため）。外部X-Forwarded-Forは信頼しない。
 - 上記制限は業務認可より前の入口制御。CSRF 不正を送って回数制限を回避しないよう、ログイン IP 枠は CSRF 検証前にも適用する。正規化可能なメール枠は CSRF 成功後・認証照合前に適用する。429 試験以外では制限枠に余裕を用意する。DB cache 障害時は 503 とし、制限なしで通さない。
 
-この期限・回数・lock 時間は追加の設計提案で、ユーザー承認済みの数値ではありません。[Laravel Sanctum](https://laravel.com/docs/13.x/sanctum)、[Session blocking](https://laravel.com/docs/13.x/session#session-blocking)、[Rate limiting](https://laravel.com/docs/13.x/rate-limiting)を 2026-09-22 に参照しました。組み合わせた処理順・HMAC key・絶対期限はアプリ側で設計・検証します。
+期限・回数は2026-09-27の利用者指示で採用しました。lock方式と入力形式の実装補足は [認証記録](authentication.md)を参照してください。[Laravel Sanctum](https://laravel.com/docs/13.x/sanctum)、[Session blocking](https://laravel.com/docs/13.x/session#session-blocking)、[PostgreSQLのadvisory lock](https://www.postgresql.org/docs/18/explicit-locking.html#ADVISORY-LOCKS)を公式資料と導入済みソースで確認しました。公開HTTPS・proxy経路はAWSで別途検証します。
 
 ## 共通エラーと判定順
 

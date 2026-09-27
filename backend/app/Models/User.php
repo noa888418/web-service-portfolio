@@ -6,12 +6,13 @@ use App\Enums\UserRole;
 use App\Support\EmailAddressValidator;
 use App\Support\EmailNormalizer;
 use Illuminate\Database\Eloquent\Casts\Attribute;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use InvalidArgumentException;
 
-// Persistence only: login, policies and session invalidation are not implemented.
-class User extends Model
+// Cookie authentication only; no API token or remember-me support.
+class User extends Authenticatable
 {
+    protected $rememberTokenName = '';
     protected $guarded = ['*'];
 
     protected $visible = ['id', 'display_name', 'role'];

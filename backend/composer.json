@@ -13,7 +13,8 @@
         "ext-openssl": "*",
         "ext-pdo_pgsql": "*",
         "ext-xml": "*",
-        "laravel/framework": "^13.0"
+        "laravel/framework": "^13.0",
+        "laravel/sanctum": "^4.0"
     },
     "require-dev": {
         "phpunit/phpunit": "^13.0"

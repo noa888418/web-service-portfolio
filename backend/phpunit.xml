@@ -9,5 +9,8 @@
             <directory>tests/Unit</directory>
             <directory>tests/Integration</directory>
         </testsuite>
+        <testsuite name="Authentication">
+            <directory>tests/Auth</directory>
+        </testsuite>
     </testsuites>
 </phpunit>

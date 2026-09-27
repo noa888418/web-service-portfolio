@@ -2,13 +2,15 @@
 
 ## 状態・参照
 
-2026-09-22 作成・更新。[要件](requirements.md)の FR-01～FR-09 を具体化する設計です。**usersの保存設計のみ今回の実装前提として採用**し、migration・モデル・正規化・実PostgreSQLの制約テストを実装しました。認証処理、依頼・コメント・管理投入などの詳細は引き続きレビュー対象の提案です。デモ運用前提は [基本設計](architecture.md)、実行手順・採用版・検証記録は [開発環境](development.md)を参照してください。[API](api.md)、[画面](screens.md)、[対応表と設計レビュー](design-review.md)と合わせて参照します。
+**2026-09-27の追加採用**：usersに加えFR-01・FR-02の認証とsessions / cache / cache_locksを実装しました。以下の09-22時点の採用範囲から認証部分だけを拡張しています。依頼・コメント・demo_seed_runs・公開用Web DB roleの設計は未承認・未実装のままです。[認証実装の詳細](authentication.md)を参照してください。
+
+2026-09-22作成、09-27更新。[要件](requirements.md)のFR-01～FR-09を具体化する設計です。09-22にusers保存設計を採用し、09-27に認証部分を追加採用しました。依頼・コメント・管理投入などの詳細は引き続きレビュー対象の提案です。デモ運用前提は [基本設計](architecture.md)、実行手順・採用版・検証記録は [開発環境](development.md)を参照してください。[API](api.md)、[画面](screens.md)、[対応表と設計レビュー](design-review.md)と合わせて参照します。
 
 ### 今回の採用範囲とLaravel標準との差分
 
-- usersのカラム・NOT NULL / UNIQUE / CHECK・部分index、IDの文字列表現、メール正規化と形式検証、ハッシュ・JSON非公開までを採用。is_active / auth_versionは保存だけを実装し、停止処理・ログイン拒否・失効は未実装です。他の業務表・APIの承認に広げません。
+- usersのカラム・NOT NULL / UNIQUE / CHECK・部分index、IDの文字列表現、メール正規化と形式検証、ハッシュ・JSON非公開を採用。09-27にはis_active / auth_versionの認証照合、管理用失効サービスとCookie APIも実装しました。管理画面・公開終了の運用ジョブ、他の業務表・APIの承認に広げません。
 - [users migration](../backend/database/migrations/2026_09_22_000001_create_users_table.php) はPostgreSQL専用DDLです。Laravelの標準的なid採番やtimestampsへ置き換えず、identity / timestamptz(6) / CHECKをそのまま検証しました。SQLite代替は使いません。
-- [Userモデル](../backend/app/Models/User.php) は永続化専用のEloquentモデルです。認証用Authenticatable・remember_token・email_verified_at・password_reset_tokens・sessions・cache・queue・token表はまだ追加していません。全mass assignmentを拒否し、管理処理が明示的に属性を設定する形です。将来のAPIは別途認可と入力検証を行います。
+- [Userモデル](../backend/app/Models/User.php) は09-27の認証工程でAuthenticatableへ変更しました。全mass assignment拒否と最小のvisible項目を維持。remember_token・email_verified_at・password_reset_tokens・queue・token表は追加しません。sessions / cache / cache_locksのみ [認証migration](../backend/database/migrations/2026_09_27_000001_create_auth_tables.php) で追加しています。
 - **管理表migrationsの設計差分**：Laravel13の標準repositoryが作るserial相当のinteger PK / migration varchar(255) / batch integerを使用し、提案したidentity・batch > 0 CHECKは今回追加しません。業務IDではなく内部適用履歴であり、フレームワーク互換を優先するためです。usersのidentity制約は変更しません。
 - メールは [EmailNormalizer](../backend/app/Support/EmailNormalizer.php)（前後Unicode空白除去・ASCII小文字化）と [EmailAddressValidator](../backend/app/Support/EmailAddressValidator.php)（ASCII・254上限・形式）を分け、モデルから順に利用します。将来のlogin / seedでも同じ順で呼ぶ前提です。DBは形式全般の検証・自動修正を行わず、正規化されていない値をCHECKで拒否します。example.test限定はデモ投入処理の追加条件案で、汎用正規化へ混ぜません。
 - DBはハッシュの暗号学的妥当性まで保証しません。モデルのLaravel hashed castを通す管理書込とDB権限の分離が必要です。現行ローカルのDB所有roleはmigration検証用で、公開用Web権限を完成させたものではありません。
@@ -121,14 +123,14 @@ DB は「対応開始後の担当者あり」と「担当者の役割」を保�
 
 ## 管理テーブル
 
-以下は管理表の設計案です。今回実際に作成するのはLaravel標準のmigrationsだけで、標準との構造差は冒頭に記録しました。その他の管理表は未実装です。
+09-27時点でsessions / cache / cache_locksは以下の型・FK・CHECK・indexどおり実装済みです。migrationsは冒頭のLaravel標準構造を維持し、demo_seed_runsだけ未実装です。sessions.payloadはLaravelによる暗号化JSONのbase64表現、IP / User-AgentはNULLとし、認証ロックにはcache_locksのleaseではなくPostgreSQLのtransaction advisory lockを使います。
 
 | テーブル | カラム（型 / NULL / 既定）・制約 | 用途・インデックス |
 | --- | --- | --- |
 | sessions | id varchar(255) PK / 不可 / なし、user_id bigint / 可 / NULL（users.id、削除 CASCADE）、ip_address varchar(45) / 可 / NULL、user_agent text / 可 / NULL、payload text / 不可 / なし、last_activity integer / 不可 / なし、CHECK last_activity >= 0 | database session。user_id と last_activity に index。未認証 CSRF 用セッションは user_id=NULL。IP / UA は原則記録しないよう保存処理を調整・検証し、必要性なしに個人情報を増やさない |
 | cache | key varchar(255) PK / 不可 / なし、value text / 不可 / なし、expiration integer / 不可 / なし、CHECK expiration >= 0 | ログイン試行制限の共有 counter / timer 等。expiration index で期限切れ清掃。業務応答やパスワードを入れない |
-| cache_locks | key varchar(255) PK / 不可 / なし、owner varchar(255) / 不可 / なし、expiration integer / 不可 / なし、CHECK expiration >= 0 | 同一セッションの要求直列化、試行制限の原子的判定。expiration index。owner は実行の識別子で認証主体ではない |
-| migrations | id integer identity PK / 不可、migration varchar(255) / 不可 / なし、batch integer / 不可 / なし、CHECK batch > 0 | Laravel の schema 適用履歴。標準 migration repository との互換性を確認。アプリの認可判定には使わない |
+| cache_locks | key varchar(255) PK / 不可 / なし、owner varchar(255) / 不可 / なし、expiration integer / 不可 / なし、CHECK expiration >= 0 | Laravel database cacheの標準lock互換用。expiration index。認証の排他はadvisory lockを使い、この表の期限には依存しない |
+| migrations | id serial相当のinteger PK / 不可、migration varchar(255) / 不可 / なし、batch integer / 不可 / なし | Laravel標準repositoryの適用履歴。元案のidentity・batch CHECKは採用しなかった（冒頭の理由参照）。アプリの認可判定には使わない |
 | demo_seed_runs | id smallint PK / 不可 / 1、CHECK id=1、seed_version varchar(50) / 不可 / なし、publication_id varchar(64) / 不可 / なし、completed_at timestamptz(6) / 不可 / CURRENT_TIMESTAMP | DB ごとに成功した初期投入を 1 行だけ記録。Web の読み書き権限なし。秘密値・パスワードの比較値は保存しない |
 
 セッションpayloadは認証情報として保護し、user_idに加えauthenticated_at・last_authenticated_activity_at（UTC UNIX秒）・認証時のauth_versionを保持します。Laravel標準のlast_activityとは別に、成功した保護要求の活動時刻と絶対期限を検査します。base64等の符号化を暗号化とみなしません。保存時暗号化は [基本設計](architecture.md)どおり。期限は [API設計](api.md)で定義し、期限切れ拒否と清掃を別処理にします。cache / lockの時刻もLaravel互換のUNIX秒であり、業務日時の例外です。公開中の定期清掃と終了時全削除を管理手順に含めます。
@@ -192,6 +194,6 @@ PostgreSQLのFOR SHAREにも対象表の少なくとも1列のUPDATE権限が必
 
 ## 根拠と未検証事項
 
-2026-09-22 に [PostgreSQL 制約](https://www.postgresql.org/docs/current/ddl-constraints.html)、[行ロック](https://www.postgresql.org/docs/current/explicit-locking.html)、[分離レベル](https://www.postgresql.org/docs/current/transaction-iso.html)、[Laravel Session](https://laravel.com/docs/13.x/session)、[Cache](https://laravel.com/docs/13.x/cache)、[Hashing](https://laravel.com/docs/13.x/hashing)を参照しました。ローカル採用版はLaravel13 / PostgreSQL18です。users以外の独自列・制約・タイムアウト・運用手順は本サービスの提案です。
+2026-09-22 に [PostgreSQL 制約](https://www.postgresql.org/docs/current/ddl-constraints.html)、[行ロック](https://www.postgresql.org/docs/current/explicit-locking.html)、[分離レベル](https://www.postgresql.org/docs/current/transaction-iso.html)、[Laravel Session](https://laravel.com/docs/13.x/session)、[Cache](https://laravel.com/docs/13.x/cache)、[Hashing](https://laravel.com/docs/13.x/hashing)を参照しました。ローカル採用版はLaravel13 / PostgreSQL18です。09-27に追加採用した認証以外の独自列・制約・業務運用手順は本サービスの提案です。認証のtimeoutの検証範囲は [認証記録](authentication.md)を参照してください。
 
-usersの実PostgreSQLでのCHECK / UNIQUE / NOT NULL、UNIQUE(id, role)への複合参照、既定値・停止状態の保存、migration再実行・他データの保持を確認しました。依頼・コメントのFK、2接続による競合・commit順、session保存と停止、cache lock、seedの検証は [横断検証計画](design-review.md)の未実施項目です。usersの成功をFR / AC全体の合格にしません。
+usersの制約・保全に加え、09-27にsessionsの保存・logout・停止競合と試行counterの競合を実PostgreSQL / HTTPで検証しました。旧payloadの再投入もauth_versionで拒否します。依頼・コメントのFK・業務競合・seedは [横断検証計画](design-review.md)の未実施項目です。認証の成功をFR / AC全体やAWS経路の合格にしません。

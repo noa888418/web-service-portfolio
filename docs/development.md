@@ -1,14 +1,14 @@
-# 開発環境・users検証・Windowsでの秘密情報検査
+# 開発環境・users / 認証検証・Windowsでの秘密情報検査
 
 ## プロジェクトの決定事項と現在の範囲
 
 React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsの使用は決定済みです。AWS月額予算は3,000円、構築から撤去まで月60時間程度、公開は事前案内期間のみ。独自ドメインは未所有です。
 
-秘密情報検査に加え、Laravel CLI・users・実PostgreSQLの検証基盤を実装しました。PHP / Composer はDocker内で使用し、ホストには導入していません。React・HTTP API・認証・Terraform・AWSは今回の対象外です。Python は検査・ローカル設定生成の補助用であり、バックエンドは Laravel です。
+秘密情報検査、Laravel・users・実PostgreSQLの基盤に加え、09-27にFR-01・FR-02の認証HTTP APIを実装しました。PHP / ComposerはDocker内で使用します。React・依頼・コメント・Terraform・AWSは対象外です。Pythonは検査・ローカル設定生成の補助用です。
 
 AWS のサブネット・SG・Cookie セッション・キャッシュ・OIDC・撤去は [基本設計案](architecture.md)、公式料金と構築・検証・撤去を含む 60 時間の試算は [費用見積もり](costs.md)を参照してください。調査済みの仕様と実機での検証済み事項を区別します。
 
-DB・API・4画面の案は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、FR/ACの対応と検証区分は [design-review.md](design-review.md)です。usersの保存設計だけを今回採用し、下記のテストを実施しました。依頼・コメント等の未承認の業務詳細、認証、別接続による業務並行処理は次工程です。
+DB・API・4画面は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、対応は [design-review.md](design-review.md)です。採用済みのusers保存設計と認証の実装差分は [authentication.md](authentication.md)に記録します。依頼・コメントの未承認の業務詳細、業務並行処理は次工程です。
 
 運用前提は架空データ専用、構築・検証6時間/公開48時間/閉鎖・保存・撤去等6時間（初月は検証に応じ公開短縮）。同期間は保持、次回公開は新DBへの初期投入。snapshot取得後7日・通常最新1世代、アプリログ7日・アクセスログ30日。作成者が公開終了時の資格情報・セッション失効と削除結果確認を担当します。誤投入は期限を待たず対応し、詳細はDB文書のOPS-01～OPS-07に従います。
 
@@ -128,7 +128,7 @@ CI は取得済みの参照から到達できる履歴を対象とし、未取�
 
 ## 今後のアプリ・AWS 作業の進め方（提案・未実施）
 
-1. ローカルのPHP・Laravel・PostgreSQL・PHPUnitは下記の採用版で検証済み。次工程でVite・HTTPサーバー・APIを追加する。公開用imageは開発依存を除外し、秘密値を build args / VITE_* / image へ埋め込まない。
+1. ローカルのPHP・Laravel・PostgreSQL・PHPUnitと認証HTTP APIは検証済み。次工程で業務API・Vite・公開用FPM / Nginxを追加する。公開用imageは開発依存を除外し、秘密値を build args / VITE_* / image へ埋め込まない。
 2. Composer audit以外の依存関係検査、イメージ検査、SBOM、Terraform fmt / validate / IaC 検査を追加し、失敗をマージ・配布の成功扱いにしない。Terraform AWS Provider は調査時 v6.65.0 を参照したが、導入と validate は未実施。
 3. 公開デモは `APP_ENV=production`、`APP_DEBUG=false` を使用する。データ投入の可否は `DEPLOYMENT_PURPOSE=demo` 等の用途、対象 account / DB の照合、ジョブごとの明示許可で分ける。既定は投入拒否とし、通常の起動・deployment から seed を呼ばない。
 4. 通常デプロイは既存 DB を維持する差分 migration とし、単発 ECS task で結果を確認する。`migrate:fresh` は使わない。デモデータの reset は保存対象の確認と復元手順を伴う別作業にする。
@@ -136,7 +136,7 @@ CI は取得済みの参照から到達できる履歴を対象とし、未取�
 
 Cookie 認証の API 検証では適切な CSRF 値を用意し、認可拒否と CSRF 拒否を区別します。CloudFront の URL が変わる再構築では APP_URL・許可ホスト・案内 URL を更新し、以前のセッションを引き継がないことを確認します。同じURLでも次回公開は旧セッションと資格情報を再利用しません。GitHub Actions からの AWS 認証は OIDC を用いる方針案で、現時点の secret scan workflow には AWS 権限を追加していません。
 
-最初の実装単位であるusers migration・メール正規化/一意性・役割/停止の保存検証は実施済みです。次はCookieログイン・me・logoutを一つの利用シナリオとして進めます。停止者拒否・auth_version照合・セッション失効はその工程で検証します。
+users保存検証に続き、Cookieログイン・me・logout、停止者拒否・auth_version照合・セッション失効を実装しました。公開経路と他の業務機能は次工程です。
 
 ## ローカル採用版と公式互換性確認（2026-09-22）
 
@@ -184,9 +184,9 @@ docker compose --profile test down
 
 `setup_local.py` は暗号学的乱数からローカル専用のAPP_KEYとDBパスワードを生成し、Git管理外のルート `.env` へ保存します。値は表示せず既存ファイルを上書きしません。`.env.example` の見本値はそのまま実行に使いません。`.env` を更新しても既存dev volumeのDBパスワードは自動更新されないため、既存値を保持し、必要な変更はDB側と合わせて行います。解決のためにvolumeを削除しないでください。展開済み `docker compose config` やコンテナ全体のinspectは値を含むため共有ログに出しません。
 
-通常の `down` はdev volumeを残し、次回同じ名前で再利用します。`down -v`、volume prune、`migrate:fresh` は日常手順に含めません。test-dbはtmpfsなので停止でデータを失います。今回のCLIにHTTPサーバー・ブラウザーURLはありません。公開デモのproduction設定・seed・初期化・障害復元は、このローカル作業と別のOPS手順です。
+通常のdownはdev volumeを残し、次回同じ名前で再利用します。down -v、volume prune、migrate:freshは日常手順に含めません。test-dbはtmpfsなので停止でデータを失います。認証テストでは一時HTTPサーバーを自動起動・撤去します。公開デモのseed・初期化・障害復元は別のOPS手順です。
 
-テストは起動時にAPP_ENV、接続方式、host=`test-db`、port、DB名 / role=`portfolio_test`を完全一致で確認し、接続URL等の上書き・Laravel config cacheを拒否します。接続後もDB名・role・非superuser・専用DBコメントを確認してから、ランダムな `users_test_...` schemaを作り、空schemaへ通常migrationします。終了時はそのschemaだけを削除し、publicや開発DBを初期化しません。各DBテストはtransactionをrollbackします。強制killでschemaが残る場合はテストDBを停止・再作成すれば解消し、開発volumeは操作しません。
+テストは起動時にAPP_ENV、接続方式、host=`test-db`、port、DB名 / role=`portfolio_test`を完全一致で確認し、接続URL等の上書き・Laravel config cacheを拒否します。接続後もDB名・role・非superuser・専用DBコメントを確認してから、ランダムなusers_test_... schemaを作り、通常migrationします。終了時はそのschemaだけ削除します。usersテストはtransactionをrollback、HTTPテストは別プロセスから見えるようfixtureをcommitし、そのschema内の行だけを各ケース後に削除します。publicや開発DBには触れません。強制killでschemaが残る場合はtest-dbを再作成し、開発volumeを操作しません。
 
 安全ガードの手動確認例（これは**非0終了が期待結果**）：
 
@@ -204,11 +204,11 @@ docker compose --profile tools run --rm composer audit --locked --no-interaction
 
 依存更新を意図した作業だけ `docker compose --profile tools run --rm composer update` を実行し、composer.json / lock差分をレビューして再build・テストします。toolingだけがbackendをbind mountし、app / testはmountしません。Linuxでtoolingが書けない場合はホストのUID / 所有権を確認し、全員書込権限で解決しません。
 
-[users.yml](../.github/workflows/users.yml) はpush / pull_requestで同じDockerfile・lock・PostgreSQL imageを使い、build時のplatform確認、Composer audit、専用DB起動、PHPUnitの2回実行を行います。権限はcontents:readのみ。生成資格情報やDB内容をartifactに保存せず、AWS権限もありません。失敗を握りつぶさず後処理だけ `always()` で行います。[secrets.yml](../.github/workflows/secrets.yml) は変更せず維持します。
+[users.yml](../.github/workflows/users.yml) はpush / pull_requestで同じDockerfile・lock・PostgreSQL imageを使い、platform確認、Composer audit、Users suite、Authentication suite、全suite再実行を行います。既存のcheck名Users PostgreSQLを維持します。権限はcontents:readのみ。生成資格情報やDB内容をartifactに保存せず、AWS権限もありません。失敗を握りつぶさず後処理だけalways()で行います。[secrets.yml](../.github/workflows/secrets.yml) は変更せず維持します。
 
 **users workflowはローカルと同じコマンドを設定した段階で、GitHubでの実行は未確認**です。push後にpush / PRの `Users PostgreSQL` と既存 `Gitleaks` のログ・SHA・成功 / 失敗伝播を確認し、Rulesets / branch protectionで両checkを必須にする作業を別途行います。workflow追加だけではマージ禁止になりません。
 
-### 今回の検証記録（2026-09-22、未コミット作業ツリー）
+### users工程当時の検証記録（2026-09-22）
 
 - 通常migration：空の開発DBにusers / migrationsを作成して成功。テスト用の空schemaへの適用も毎回成功。
 - PHPUnit：62テスト / 101アサーション、同じ実PostgreSQLで2回連続成功、warning / deprecationなし。2役割、正規化と形式検証の分離、重複、直接INSERTのUNIQUE / CHECK / NOT NULL、既定値、停止状態、複合参照、Argon2id、JSON非公開を確認。
@@ -218,3 +218,46 @@ docker compose --profile tools run --rm composer audit --locked --no-interaction
 - 秘密情報検査：Gitleaksのfiles / stagedは検出なし。隔離テストでダミーのコミット拒否・HEAD不変・伏字化・ツール不在時拒否・既存フック保全を確認。管理対象にignore対象の追跡ファイルなし。文書のローカルリンク99件とgit diff --check（作業ツリー / index）も確認。
 - 修正した失敗：非rootの/app所有者不足、共有DBコメントの取得関数、一時表から通常表へのFKというテストDDL、DB既定値を未取得の比較、PHPUnit旧設定の非推奨警告。所有権・SQL・比較時点・設定を修正し、制約・テストを外して通していない。
 - 未実施：ログイン・停止者拒否・セッション失効・CSRF・API / 画面、依頼とコメントの並行処理、seed、AWS、イメージ脆弱性検査 / SBOM、GitHub実行と必須チェック。アカウント停止フラグの保存テストを認証テストの成功と扱わない。
+
+### 認証追加後のWindows再実行（2026-09-27）
+
+この節が現在の認証検証手順です。上の09-22の記録は当時の結果として残します。利用者からもusersの62テスト・101アサーション・終了コード0がWindowsで成功したと確認を得ています。
+
+Sanctum **4.3.3**を追加し、既存のPHP 8.4.25 / Laravel 13.32.0 / Composer 2.10.3 / PostgreSQL 18.6 / PHPUnit 13.3.4は維持しました。既存lock packageの更新・削除はなく、Sanctumのみ追加です。設計理由と公式資料（09-27確認）は [authentication.md](authentication.md)を参照してください。
+
+Docker Desktopを起動し、ルートのPowerShellで1行ずつ実行します。各コマンド直後の `$LASTEXITCODE` が0であることを確認し、非0なら後続へ進みません。
+
+```powershell
+# 既存.envは上書きしない。クローン直後にも使用できる
+python scripts/setup_local.py
+docker compose config --quiet
+docker compose build app
+docker compose --profile test up -d --wait test-db
+
+# 通常はこちら1回でusers + 認証の全検証
+docker compose --profile test run --rm test
+$LASTEXITCODE
+
+# 切り分けたい場合のみ個別suite（CIもこの名前で実行）
+docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Users
+docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Authentication
+
+# dev volumeを維持して停止。-vは付けない
+docker compose --profile test down
+```
+
+テストでは実HTTPサーバー2プロセスとCookie保持クライアントをコンテナ内で自動起動し、CSRF取得→login→me→logout→meの401まで検証します。HTTP / DBポートをホストへ公開する必要はありません。WindowsへPHPやcurlを追加導入する必要もありません。テスト資格情報は一時schemaのfixture専用で、公開デモへ配布・投入するものではありません。テスト用clockや並行処理ルートもpublic/index.phpでは読まれません。
+
+通常の開発DBへ管理表を追加する場合は、既存の「起動・migration」の `docker compose up -d --wait dev-db` → `docker compose run --rm app php artisan migrate --force` を使用します。これは差分migrationで、usersを初期化しません。今回の認証検証で開発DBの起動・migration・初期化は行っていません。
+
+ローカルHTTPはComposeの `SESSION_SECURE_COOKIE=false` だけを使います。公開では `APP_ENV=production` によりSecure=trueを強制し、HttpOnly / SameSite=Lax / host-onlyを維持します。公開用proxy / HTTPS疎通をローカルHTTPで検証済みにしません。
+
+### 認証工程の検証記録（2026-09-27、未コミット作業ツリー）
+
+- 全suite：**83テスト・645アサーション、終了コード0**、同じDBで再実行も成功。個別のUsersは**62テスト・101アサーション**、Authenticationは**21テスト・544アサーション**で、ともに終了コード0。CSRFを無効化せず、actingAsでフローを省略していません。
+- 保全：専用test-dbのpublicへ検証専用行を置き、個別suiteと全suiteの実行後も保持、一時schema残存0を確認。作成した検証用表だけ確認後に撤去。既存接続先ガードは変更せず、開発DBは起動・変更していません。
+- 有効な2役割、共通認証失敗、session ID更新と旧Cookie拒否、logout、停止・auth_version、制御時計で30分/8時間の境界、試行枠5/30回・60秒回復・Retry-After、保護項目、最小JSON・Cookie属性・ログ秘匿を確認。
+- 並行処理：独立したHTTPプロセス、同期点とPGの待機観測で保存対logout/停止、同メールcounter競合を確認。advisory lockの競合待機は4.8～7秒の期待範囲で503、その後の解放・logoutも成功。要求全体の20秒強制終了や通信断の上限は未保証。
+- Composer audit：Sanctum追加後のlockに既知の脆弱性情報検出なし。既存依存の不要な更新はなし。
+- 修正した検証失敗：テスト補助メソッド名statusがPHPUnitのfinalメソッドと衝突したためassertResponseへ改名。実装の制約やCSRF・失敗判定を緩めていません。
+- 未検証：今回追加したActionsのGitHub実行・必須チェック、実HTTPS・CloudFront/proxy・Fargate負荷、DBネットワーク断/公開worker強制終了、期限切れsession/cacheの定期清掃。公開の資格情報配布・一括失効ジョブ、React・業務機能・AWSは未実装です。
