@@ -19,6 +19,19 @@ Illuminate\Support\Carbon::setTestNow(Illuminate\Support\Carbon::createFromTimes
 // Failure/ordering injection exists only behind the test database + schema guard.
 $scenario = file_get_contents(getenv('AUTH_TEST_SCENARIO'));
 Illuminate\Support\Facades\DB::listen(function ($event) use ($scenario) {
+    $update = str_starts_with($event->sql, 'update "service_requests"');
+    $stop = str_starts_with($event->sql, 'update "users"');
+    if ($update && $scenario === 'fail_after_update') {
+        throw new RuntimeException('fixture injected after update');
+    }
+    if (($update && $scenario === 'hold_after_update') || ($stop && $scenario === 'hold_after_stop')) {
+        touch(getenv('AUTH_TEST_BARRIER').'.entered');
+        $deadline = microtime(true) + 12;
+        while (! is_file(getenv('AUTH_TEST_BARRIER').'.release')) {
+            if (microtime(true) >= $deadline) { throw new RuntimeException('Workflow barrier timed out.'); }
+            usleep(10000);
+        }
+    }
     if (! str_starts_with($event->sql, 'insert into "service_requests"')) {
         return;
     }

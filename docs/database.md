@@ -2,9 +2,9 @@
 
 ## 状態・参照
 
-**2026-09-27の追加採用**：users・認証管理表に続き、FR-03・FR-04・FR-05のコメントを除く詳細とservice_requestsの保存制約を実装しました。担当/状態変更・コメント・demo_seed_runs・公開用Web DB roleは未承認・未実装です。[依頼実装の詳細](requests.md)、[認証実装](authentication.md)を参照してください。
+**2026-09-28の追加採用**：users・認証管理表・service_requestsに続き、FR-06/07とAC-14の担当/状態更新を実装しました。既存migration・カラム・制約は変更せず、Laravelの認可・遷移・版照合で保証する操作を追加しています。コメント・demo_seed_runs・公開用Web DB roleは未実装です。[担当/状態の実装](request-workflow.md)、[依頼実装](requests.md)、[認証実装](authentication.md)を参照してください。
 
-2026-09-22作成、09-27更新。[要件](requirements.md)のFR-01～FR-09を具体化する設計です。users・認証に続いて依頼登録と閲覧部分を採用しました。担当/状態変更・コメント・管理投入等は引き続き提案です。デモ運用前提は [基本設計](architecture.md)、実行手順・採用版・検証記録は [開発環境](development.md)、[API](api.md)、[画面](screens.md)、[対応表](design-review.md)を参照してください。
+2026-09-22作成、09-28更新。[要件](requirements.md)のFR-01～FR-09を具体化する設計です。コメント・管理投入等は引き続き提案です。デモ運用前提は [基本設計](architecture.md)、実行手順・採用版・検証記録は [開発環境](development.md)、[API](api.md)、[画面](screens.md)、[対応表](design-review.md)を参照してください。
 
 ### 今回の採用範囲とLaravel標準との差分
 
@@ -109,7 +109,7 @@ erDiagram
 
 追加制約：`CHECK(status = 'open' OR assignee_id IS NOT NULL)` と `FOREIGN KEY(assignee_id, assignee_role) REFERENCES users(id, role) MATCH SIMPLE ON DELETE RESTRICT ON UPDATE RESTRICT` 相当です（DDL 構文は migration 工程で検証）。assignee_id が NULL のときだけ複合参照を省略し、非 NULL なら IT担当者しか指せません。補助列を置く理由は、他テーブルの role を CHECK の中で検索する誤った実装を避け、直接 SQL でも役割を保証するためです。Eloquent の関連自体は assignee_id で定義できます。
 
-DB は「対応開始後の担当者あり」と「担当者の役割」を保証します。**状態の遷移順、現在操作中の利用者の権限、担当候補の有効性、完了後の不変性は Laravel の業務処理で保証**します。全依頼に CHECK を満たすだけではこれらを保証できません。停止した担当者を過去の依頼から消さず、未完了なら別の有効 IT担当者へ変更します。停止者が割り当てられたままの状態変更は 409 とする追加案です。
+DB は「対応開始後の担当者あり」と「担当者の役割」を保証します。**状態の遷移順、現在操作中の利用者の権限、担当候補の有効性、完了後の不変性は Laravel の業務処理で保証**します。全依頼に CHECK を満たすだけではこれらを保証できません。停止した担当者を過去の依頼から消さず、未完了なら別の有効 IT担当者へ変更します。停止者が割り当てられたままの状態変更を409とする仕様は09-28に採用・実装済みです。
 
 ## comments
 
@@ -162,17 +162,19 @@ PostgreSQLのFOR SHAREにも対象表の少なくとも1列のUPDATE権限が必
 | コメント | 親・投稿者存在、本文長 | 親の閲覧権、親行ロック後の completed 判定、投稿者を認証主体から設定 |
 | 競合 | 行ロック、原子的 commit / rollback | 取得した version と一致を要求し、不一致 409。入力を再適用しない |
 
-以下は未実装の担当/状態変更・コメントの書込手順案です。実装済みの登録は認証middlewareが取得したusers共有lockをsession保存まで保持し、既存依頼の親行lockや内側の独立commitを追加しません。今後の操作も外側session transactionのcommit境界と合わせて検証する必要があります。
+担当/状態変更は外側session transactionを使用し、内側で独立commitしません。旧案「controllerでtransaction開始、本人を含む全usersをID順」は、認証middlewareが先に本人を共有lockする実装と矛盾するため、次の順序へ修正しました。
 
-1. API 共通処理で CSRF・認証・閲覧・操作権・入力を確認。セッションロック取得は DB 業務トランザクションより前。ハッシュ生成・ネットワーク呼出は親行ロックの外で行う。
-2. transaction を開始し、操作する利用者と新規担当候補の users 行を **ID 昇順で FOR SHARE**。is_active・auth_version・role を再確認する。状態変更では事前読取した現担当者もこの組へ入れる。
-3. 対象 service_requests の **1 行を FOR UPDATE** で取得し、閲覧権を再確認する。担当が事前読取から変わっていたら、新たな users 行を逆順に追加ロックせず 409 としてやり直す。外部入力で他人の行を自由にロックできないよう事前スコープを通す。
-4. 担当・状態変更は `expected_version` と version を比較（不一致なら 409）、その後状態・候補を再検査。更新し version +1、updated_at 更新。同じ担当への変更・同じ状態は 409。成功応答は commit 後に返す。
-5. コメントは **expected_version を要求しない**。親の completed をロック後に検査してから INSERT。親の version / updated_at は変更しない。コメント同士は追記であり上書き競合がないためで、一覧順もコメント時刻では変わらない。
+1. 外側transaction開始 → session advisory lock → session読取 → CSRF → 認証本人のusers **FOR SHARE**、停止・auth_version・期限照合。事前の依頼閲覧可否・IT権限・入力を確認する。
+2. 事前読取した現担当者と新候補から本人を除き、数字ID昇順で **FOR SHARE NOWAIT**。本人は既にlock済み。追加usersで待機しないことで、別の本人lock・停止待ちが絡む循環待機を作らない。取得不可は503で全体rollbackし、自動再試行しない。
+3. 親service_requests **1行をFOR UPDATE**。閲覧権・操作権・version・現担当者を再確認する。担当が事前読取から変わった場合は、未lockの新担当者を親の後で取得せず409 stale_version。expected_versionが偶然最新値でも同様。
+4. 現状態・lock済み担当者の有効性を確認し、許可操作だけ更新、version +1・updated_at更新。同一担当/状態は409。最大versionでは500として上限を越えない。必要な全lockをsession保存・外側commitまで保持し、成功してから200を送信する。
+5. 候補GETは本人users共有lock → 親の共有lockで未完了を確認 → 有効IT候補と件数を単一SELECTで読む。候補一覧は予約ではなく、PATCHで有効性を再検査する。
 
-コメントが先に親をロックすると投稿 commit の後に完了でき、完了が先なら待機後の投稿は 409 です。INSERT だけをロックして親の状態を先に読む方式は使いません。DB transaction 内の HTTP 呼出・UI 待ちは禁止。ロック待ち・deadlock は rollback を確認し 503（再確認を促す）へ変換する案です。アプリやクライアントが不明な書込結果を自動再送しません。
+停止は既存の管理処理が**単一users FOR UPDATE** → is_active=false・auth_version +1 → sessions削除 → commitです。割り当てが先なら共有lock終了まで停止が待ち、停止が先にlock中なら追加共有lockは即時503、停止commit後の新候補指定は422です。既存担当が停止しても履歴参照は維持し、状態変更は有効担当への変更まで409。将来の一括停止は入口閉鎖・drain後に設計/検証するもので、今回実装したとは扱いません。
 
-アカウント停止は管理処理が users を同じ ID 順で FOR UPDATE、is_active=false・auth_version +1 とし、その利用者の sessions を削除します。停止前に共有ロックを取った書込の終了を待ち、停止 commit 後の書込は拒否します。セッション保存の遅延で古い行が復活しても auth_version 不一致を拒否するため、行削除だけに頼りません。公開終了時は先に入口閉鎖・処理の drain を行い、全アカウントに同処理を適用します。
+親行の待機には既存lock_timeout=5秒・statement_timeout=10秒が適用されます。要求全体やネットワーク断の時間上限の保証ではありません。DB transaction内の外部HTTP呼出・UI待ちは禁止し、通信結果不明時も無条件に再送しません。[公式根拠・並行処理の実測範囲](request-workflow.md)を参照してください。
+
+**コメントの未実装案**：expected_versionを要求せず、本人users → 親FOR UPDATEで未完了・閲覧権を再確認してINSERT、親version/updated_atは変更しません。投稿が先なら投稿commit後に完了でき、完了が先なら投稿409とする案です。この投稿対完了のロック整合性・競合試験は次のコメント工程で実施します。
 
 ## 管理手順とデータの寿命
 
@@ -196,6 +198,6 @@ PostgreSQLのFOR SHAREにも対象表の少なくとも1列のUPDATE権限が必
 
 ## 根拠と未検証事項
 
-2026-09-22 に [PostgreSQL 制約](https://www.postgresql.org/docs/current/ddl-constraints.html)、[行ロック](https://www.postgresql.org/docs/current/explicit-locking.html)、[分離レベル](https://www.postgresql.org/docs/current/transaction-iso.html)、[Laravel Session](https://laravel.com/docs/13.x/session)、[Cache](https://laravel.com/docs/13.x/cache)、[Hashing](https://laravel.com/docs/13.x/hashing)を参照しました。ローカル採用版はLaravel13 / PostgreSQL18です。09-27に追加採用した認証以外の独自列・制約・業務運用手順は本サービスの提案です。認証のtimeoutの検証範囲は [認証記録](authentication.md)を参照してください。
+2026-09-22 に [PostgreSQL 制約](https://www.postgresql.org/docs/current/ddl-constraints.html)、[行ロック](https://www.postgresql.org/docs/current/explicit-locking.html)、[分離レベル](https://www.postgresql.org/docs/current/transaction-iso.html)、[Laravel Session](https://laravel.com/docs/13.x/session)、[Cache](https://laravel.com/docs/13.x/cache)、[Hashing](https://laravel.com/docs/13.x/hashing)を参照しました。ローカル採用版はLaravel13 / PostgreSQL18です。冒頭で採用済みとした部分以外のコメント・投入・公開運用等は本サービスの提案です。認証のtimeoutの検証範囲は [認証記録](authentication.md)を参照してください。
 
-users・認証に続き、今回service_requestsの保存制約・FK、登録/閲覧、登録対停止・session保存失敗時のrollbackを実PostgreSQL / HTTPで検証します。担当/状態変更・コメントの並行処理・seedは [横断検証計画](design-review.md)の未実施項目です。今回の成功をFR / AC全体やAWS経路の合格にしません。
+users・認証・依頼登録/閲覧に続き、担当/状態の版競合、担当停止との競合、session保存失敗・更新後例外のrollbackを実PostgreSQL / HTTPで検証しました。コメントと完了の並行処理・seedは [横断検証計画](design-review.md)の未実施項目です。今回の成功をFR / AC全体やAWS経路の合格にしません。

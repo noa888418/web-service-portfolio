@@ -27,7 +27,7 @@ final class ApiBoundary
                 return ApiError::response(429, 'rate_limited', headers: ['Retry-After' => (string) $wait]);
             }
         }
-        if ($request->isMethod('POST')) {
+        if ($request->isMethod('POST') || $request->isMethod('PATCH')) {
             $raw = $request->getContent();
             if (strlen($raw) > 65536) {
                 return ApiError::response(413, 'payload_too_large');

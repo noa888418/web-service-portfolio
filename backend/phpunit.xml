@@ -15,5 +15,8 @@
         <testsuite name="Requests">
             <directory>tests/Requests</directory>
         </testsuite>
+        <testsuite name="Workflow">
+            <directory>tests/Workflow</directory>
+        </testsuite>
     </testsuites>
 </phpunit>

@@ -31,7 +31,9 @@ jobs:
         run: docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Authentication
       - name: Test request creation and scoped reads
         run: docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Requests
-      - name: Repeat all tests in the same database
+      - name: Test assignment and status concurrency separately
+        run: docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Workflow
+      - name: Repeat all suites after workflow verification
         run: docker compose --profile test run --rm test
       - name: Stop containers
         if: always()

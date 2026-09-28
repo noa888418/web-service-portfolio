@@ -2,7 +2,7 @@
 
 ## 状態・共通契約
 
-2026-09-27にFR-01・FR-02の認証方針を採用し、API-01～API-04を実装しました。その後、FR-03・FR-04・FR-05のコメントを除く詳細を採用し、API-05～API-07も実装しました。API-08～API-12は提案・未実装です。認証はSanctum Cookie、PostgreSQL session、無操作30分・絶対8時間、正規化メール5回/IP30回（各60秒）を維持します。[依頼APIの実装・検証](requests.md)、[認証記録](authentication.md)、[開発手順](development.md)を参照してください。
+2026-09-27に認証API-01～04、依頼登録/一覧/コメントを除く詳細API-05～07を実装しました。09-28にはFR-06/07・AC-14の更新競合を採用し、担当候補/担当変更/状態変更API-08～10も実装しました。コメントAPI-11/12は提案・未実装です。認証はSanctum Cookie、PostgreSQL session、無操作30分・絶対8時間、正規化メール5回/IP30回（各60秒）を維持します。[担当/状態の実装](request-workflow.md)、[依頼API](requests.md)、[認証記録](authentication.md)、[開発手順](development.md)を参照してください。
 
 2026-09-22 作成、09-27認証部分を更新。[DB](database.md)がコード・型の定義元、[画面](screens.md)が呼出元、[横断対応表](design-review.md)がFR / ACの追跡先です。JWT、一般会員登録、編集・削除、役割変更APIは提供しません。FR-09はDB文書のOPS-02 / OPS-03へ対応付けます。
 
@@ -10,7 +10,7 @@
 
 全成功・失敗応答に `Cache-Control: private, no-store` を付けます（204 も対象）。CloudFront は default の CachingDisabled と AllViewer、エラーの最小 TTL も設定可能なものは 0。[基本設計](architecture.md)の通り API の失敗を SPA の HTML / 200 に置き換えません。CORS の広い許可、localStorage の認証情報、service worker による API 保存は使いません。
 
-入力は endpoint ごとの許可リストで取り出し、一括代入しません。body は JSON object のみ、重複 key・不正 JSON は 400、JSON 以外は 415、body は全体 64 KiB 上限（413）を提案。業務テキストの整形・上限は DB 文書と同じです。未知の一般項目は 422、以下の保護項目は当該操作の許可項目でない限り **403**：`id`、`requester_id`、`author_id`、`service_request_id`、`assignee_id`、`assignee_role`、`status`、`role`、`is_active`、`auth_version`、`password`、`created_at`、`updated_at`、`version`。`expected_version` は指定する更新 API だけが受け付ける制御項目です。query も許可リストで検査し、所有者指定・sort・per_page で範囲を拡大させません。
+入力はendpointごとの許可リストで取り出し、一括代入しません。POST/PATCHのbodyはJSON objectのみ、重複key・不正JSONは400、JSON以外415、全体64KiB上限413を実装しています。業務テキストの整形・上限はDB文書と同じです。未知の一般項目は422、以下の保護項目は当該操作の許可項目でない限り **403**：`id`、`requester_id`、`author_id`、`service_request_id`、`assignee_id`、`assignee_role`、`status`、`role`、`is_active`、`auth_version`、`password`、`created_at`、`updated_at`、`version`。`expected_version` は指定する更新APIだけが受け付ける制御項目です。queryも許可リストで検査し、所有者指定・sort・per_pageで範囲を拡大させません。
 
 ## 認証・CSRF・失効・試行制限
 
@@ -59,15 +59,17 @@
 
 最小の利用者参照は `UserRef={id,display_name}`、ログイン本人だけ `CurrentUser={id,display_name,role}`。メール・is_active・auth_version は不要なので返しません。`RequestSummary={id,title,category,requester,assignee,status,version,created_at}`。`assignee` は UserRef または null。`RequestDetail` は Summary に body・updated_at を追加。`Comment={id,body,author,created_at}` で、親は URL から分かるため親 ID を重複返却しません。
 
-一覧・コメント・担当候補は `page` だけ指定可（省略1、先頭ゼロなしの十進正整数、上限2147483647）。20件固定。成功はdata配列とmeta={current_page,per_page,total,last_page}、last_pageは最小1、範囲外は200 + 空配列。本人に許可されたqueryからtotalを求め、他人の件数を含めません。実装済みの依頼一覧は認可付きCTEからCOUNTとページ行を単一SELECTで取得し、READ COMMITTEDでも同じsnapshotを使います。認証・session保存のtransaction途中でREAD ONLY / REPEATABLE READへ変更する旧案は採用しません（[理由](requests.md)）。別ページ間の挿入によるずれは許容します。コメント・担当候補は未実装です。
+一覧・コメント・担当候補は `page` だけ指定可（省略1、先頭ゼロなしの十進正整数、上限2147483647）。20件固定。成功はdata配列とmeta={current_page,per_page,total,last_page}、last_pageは最小1、範囲外は200 + 空配列。本人に許可されたqueryからtotalを求め、他人の件数を含めません。実装済みの依頼一覧・担当候補はCTEからCOUNTとページ行を単一SELECTで取得し、READ COMMITTEDでも同じsnapshotを使います。認証・session保存のtransaction途中でREAD ONLY / REPEATABLE READへ変更する旧案は採用しません（[理由](requests.md)）。別ページ間の挿入によるずれは許容します。コメントは未実装です。
 
 依頼は created_at DESC, id DESC、コメントは created_at ASC, id ASC、担当候補は id ASC。cursor・sort・件数変更機能は追加しません。UI でコードは日本語ラベルへ対応付けます。
 
 ## API 一覧
 
-全 API の追加項目拒否・共通エラー・非キャッシュは上記を継承します。保護 API は**有効な社員 / IT担当者セッション**が前提です。更新はコミットしたデータから応答を作ります。
+全APIの追加項目拒否・共通エラー・非キャッシュは上記を継承します。保護APIは**有効な社員 / IT担当者セッション**が前提です。更新後データから応答を組み立て、session保存・外側commit成功後に送信します。
 
 API-05～07もweb / CSRF / AuthenticatedSessionを共有します。API-06は認証時のusers共有lockを維持してINSERTし、応答を組み立てた後、session保存と外側commitの成功後に送信します。controller終了をcommitとは扱いません。session保存失敗や途中の5xxでは登録もrollbackします。詳細JSONにcommentsは追加せず、FR-05のコメント部分は未実装として残します。
+
+API-08～10も同じ認証/CSRF/外側transactionを共有します。認証本人users共有lockの後、PATCHは現担当/新候補をFOR SHARE NOWAIT、親をFOR UPDATEし、権限・版・状態・有効性を再確認します。追加usersのlock競合は503、停止確定後の別候補指定は422、親の版不一致は409。事前読取から担当が変化した場合も409です。版→完了→同一値/候補/遷移の順で判定し、同一担当は停止済みでも409 no_change。更新が必要でversion最大値なら500で無変更を維持します。[理由と実測](request-workflow.md)を参照してください。
 
 | API ID | method / path | FR / 主な AC | 認可・入力 | 成功・応答 | 個別エラー・transaction |
 | --- | --- | --- | --- | --- | --- |
@@ -78,7 +80,7 @@ API-05～07もweb / CSRF / AuthenticatedSessionを共有します。API-06は認
 | API-05 | GET /api/requests | FR-04、AC-06・AC-07・AC-08・AC-19 | 社員は自分、ITは全件。query page のみ | 200、data: RequestSummary[]、meta | 401、403所有者指定、422 page等。認可 scope と件数を同一読取 snapshot で計算 |
 | API-06 | POST /api/requests | FR-03、AC-04・AC-05・AC-07・AC-09・AC-13・AC-18 | 社員のみ。title / body / category のみ。1～100改行不可、1～5000、3コード | 201、data: RequestDetail、Location: /api/requests/{id} | ITは403。422入力、419。users を共有ロックして社員・有効性を再確認し、requester=本人、status=open、assignee=NULL、version=1 を1 transaction で INSERT |
 | API-07 | GET /api/requests/{request_id} | FR-05、AC-06・AC-07・AC-08・AC-13・AC-19 | 社員は自分、ITは全件。query なし | 200、data: RequestDetail | 401、404不可 / 不在。コメントは API-11 で別取得。関連 UserRef を含む読取は同一 snapshot |
-| API-08 | GET /api/requests/{request_id}/assignee-candidates | FR-06、AC-07・AC-08・AC-10 | 閲覧可能な依頼、ITのみ、未完了。page のみ。有効な IT担当者だけ | 200、data: UserRef[]、meta | 対象不可は404、自分の依頼でも社員は403、完了は409。閲覧・状態・候補 / 件数を同一読取 snapshot で確認 |
+| API-08 | GET /api/requests/{request_id}/assignee-candidates | FR-06、AC-07・AC-08・AC-10 | 閲覧可能な依頼、ITのみ、未完了。page のみ。有効な IT担当者だけ | 200、data: UserRef[]、meta | 対象不可は404、自分の依頼でも社員は403、完了は409。親共有lockで状態を保持、候補/件数は単一SELECT。候補の将来の有効性はPATCHで再確認 |
 | API-09 | PATCH /api/requests/{request_id}/assignee | FR-06、AC-07～AC-10・AC-14・AC-18 | 閲覧可・ITのみ。assignee_id（必須、数字文字列またはnull）、expected_version（必須） | 200、data: RequestDetail、新 version | 404不可 / 不在、403権限、422社員 / 不在 / 停止候補・型、409古い版 / 完了 / open以外の解除 / 同一担当。DB文書の users → 親行ロックで更新 |
 | API-10 | PATCH /api/requests/{request_id}/status | FR-07、AC-07～AC-09・AC-11・AC-14・AC-18 | 閲覧可・ITのみ。status（4コード）、expected_version（必須） | 200、data: RequestDetail、新 version、担当を保持 | 422未定義コード、409古い版 / 禁止遷移 / 未割当 / 停止担当者。ロック中に旧状態を確認し許可遷移だけ commit |
 | API-11 | GET /api/requests/{request_id}/comments | FR-05、AC-06・AC-07・AC-08・AC-13・AC-19 | 親閲覧可（完了含む）。page のみ | 200、data: Comment[]、meta | 401、404不可 / 不在。親の閲覧条件・COUNT・子取得を同一読取 snapshot で確認 |

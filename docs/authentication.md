@@ -2,7 +2,7 @@
 
 ## 採用範囲（2026-09-27）
 
-後続の依頼API工程でAPI-05～07へ同じ認証middlewareを適用しました。users共有lock・session保存と業務INSERTのcommit順、5xx時のrollback追加は [requests.md](requests.md)に記録します。以下の「今回」は認証工程当時の範囲です。83テスト・645アサーション・終了コード0は利用者のローカル再実行でも確認済みで、GitHub実行結果とは区別します。
+後続工程でAPI-05～10へ同じ認証middlewareを適用しました。users共有lock・session保存と業務INSERTのcommit順、5xx時のrollback追加は [requests.md](requests.md)、担当/状態更新での追加users NOWAIT・親lock・停止競合は [request-workflow.md](request-workflow.md)に記録します。認証が先に本人をlockする順序は変更していません。以下の「今回」は認証工程当時の範囲です。83テスト・645アサーション・終了コード0は利用者のローカル再実行でも確認済みで、GitHub実行結果とは区別します。
 
 利用者が採用したのはSanctum Cookie認証、PostgreSQL session、無操作30分・ログインから絶対8時間、正規化メール5回/60秒・信頼できるIP30回/60秒です。GET `/sanctum/csrf-cookie`、POST `/login`、GET `/api/me`、POST `/logout` を実装しました。依頼・コメント・画面・公開デモのseed・AWSは今回の対象外、業務詳細は引き続き提案です。[API契約](api.md)、[DB](database.md)、[Windows手順](development.md)と合わせて参照します。
 

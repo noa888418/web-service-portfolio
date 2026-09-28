@@ -101,6 +101,11 @@ final class ServiceRequestController
         return response()->json(['data' => $this->representation($row, true)]);
     }
 
+    public function detailData(User $user, string $id): array
+    {
+        return $this->representation($this->query($user, true)->where('service_requests.id', $id)->first(), true);
+    }
+
     private function query(User $user, bool $detail)
     {
         $columns = ['service_requests.id', 'title', 'category', 'status', 'version', 'service_requests.created_at',

@@ -228,9 +228,14 @@ final class RequestApiTest extends TestCase
         foreach (['PATCH', 'DELETE'] as $method) {
             $this->assertResponse($browser->request($method, '/api/requests/'.$id, []), 405);
         }
-        foreach (['comments', 'status', 'assignee'] as $path) {
+        foreach (['comments'] as $path) {
             $this->assertResponse($browser->request('GET', '/api/requests/'.$id.'/'.$path), 404);
         }
+        foreach (['status', 'assignee'] as $path) {
+            $this->assertResponse($browser->request('GET', '/api/requests/'.$id.'/'.$path), 405);
+            $this->assertResponse($browser->request('PATCH', '/api/requests/'.$id.'/'.$path, []), 403);
+        }
+        $this->assertResponse($browser->request('GET', '/api/requests/'.$id.'/assignee-candidates'), 403);
         self::assertSame(1, DB::table('service_requests')->count());
     }
 

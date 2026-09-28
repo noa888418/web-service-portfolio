@@ -4,7 +4,7 @@
 
 React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsの使用は決定済みです。AWS月額予算は3,000円、構築から撤去まで月60時間程度、公開は事前案内期間のみ。独自ドメインは未所有です。
 
-秘密情報検査、Laravel・users・認証HTTP APIに続き、FR-03・FR-04・FR-05のコメントを除く依頼APIを実装しました。PHP / ComposerはDocker内で使用します。担当/状態変更・コメント・React・Terraform・AWSは今回の対象外です。Pythonは検査・ローカル設定生成の補助用です。
+秘密情報検査、Laravel・users・認証・依頼登録/閲覧に続き、FR-06/07の担当/状態APIとAC-14の更新競合を実装しました。PHP / ComposerはDocker内で使用します。コメント・React・公開デモseed・Terraform・AWSは今回の対象外です。Pythonは検査・ローカル設定生成の補助用です。過去の日付の検証記録は当時の結果を維持し、最新結果は末尾の09-28記録に分けます。
 
 AWS のサブネット・SG・Cookie セッション・キャッシュ・OIDC・撤去は [基本設計案](architecture.md)、公式料金と構築・検証・撤去を含む 60 時間の試算は [費用見積もり](costs.md)を参照してください。調査済みの仕様と実機での検証済み事項を区別します。
 
@@ -204,7 +204,7 @@ docker compose --profile tools run --rm composer audit --locked --no-interaction
 
 依存更新を意図した作業だけ `docker compose --profile tools run --rm composer update` を実行し、composer.json / lock差分をレビューして再build・テストします。toolingだけがbackendをbind mountし、app / testはmountしません。Linuxでtoolingが書けない場合はホストのUID / 所有権を確認し、全員書込権限で解決しません。
 
-[users.yml](../.github/workflows/users.yml) はpush / pull_requestで同じDockerfile・lock・PostgreSQL imageを使い、platform確認、Composer audit、Users suite、Authentication suite、Requests suite、全suite再実行を行います。既存のcheck名Users PostgreSQLを維持します。権限はcontents:readのみ。生成資格情報やDB内容をartifactに保存せず、AWS権限もありません。失敗を握りつぶさず後処理だけalways()で行います。[secrets.yml](../.github/workflows/secrets.yml) は変更せず維持します。
+[users.yml](../.github/workflows/users.yml) はpush / pull_requestで同じDockerfile・lock・PostgreSQL imageを使い、platform確認、Composer audit、Users suite、Authentication suite、Requests suite、Workflow suite、全suite再実行を行います。既存のcheck名Users PostgreSQLを維持します。権限はcontents:readのみ。生成資格情報やDB内容をartifactに保存せず、AWS権限もありません。失敗を握りつぶさず後処理だけalways()で行います。[secrets.yml](../.github/workflows/secrets.yml) は変更せず維持します。
 
 **users workflowはローカルと同じコマンドを設定した段階で、GitHubでの実行は未確認**です。push後にpush / PRの `Users PostgreSQL` と既存 `Gitleaks` のログ・SHA・成功 / 失敗伝播を確認し、Rulesets / branch protectionで両checkを必須にする作業を別途行います。workflow追加だけではマージ禁止になりません。
 
@@ -297,3 +297,47 @@ docker compose --profile test down
 - 修正したテストの誤り：PostgreSQLのRESTRICT拒否はSQLSTATE 23001（通常の参照先不存在23503とは別）。停止がsessionを削除した後の旧POSTはCSRF先行で419、GETは401。これらの期待値を既存契約に合わせ、正しいCSRF更新後のPOSTも401であることを追加確認しました。
 - GitHub CI：Requests suiteを既存workflowへ追加した段階です。対象コミットの実行URL・結果証跡がないため成功とは扱いません。check名Users PostgreSQLとGitleaksを維持し、必須チェック設定は別途確認します。
 - 未実施：担当/状態変更、FR-05のコメント、ReactでのHTML非実行・操作性、AWS/CloudFrontのAC-19、公開DB権限分離・性能測定。APIがタグ風文字列をJSONとして返すことと、ブラウザーでXSSが起きないことを区別します。
+
+### 担当・状態更新のWindows手順と記録（2026-09-28）
+
+FR-06/07・AC-14の担当/状態更新競合を採用しました。[request-workflow.md](request-workflow.md)に認可・エラー・lock順の設計調整とFR/AC対応を記録しています。前工程の155テスト・1,656アサーション・終了コード0は利用者のWindowsでも確認済みです。今回の追加分を利用者が再実行したとは記録しません。
+
+PowerShellでルートから1行ずつ実行し、各コマンド直後の `$LASTEXITCODE` が非0なら次へ進まず原因を確認します。Docker DesktopはLinux containersを使用します。
+
+```powershell
+# 既存.envを上書きせず、不足時だけローカル値を生成
+python scripts/setup_local.py
+docker compose build app
+docker compose --profile test up -d --wait test-db
+
+# 通常はこちら。Users / Authentication / Requests / Workflowを全実行
+docker compose --profile test run --rm test
+$LASTEXITCODE
+
+# 担当・状態だけを切り分ける場合
+docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Workflow
+$LASTEXITCODE
+
+python scripts/secrets.py files
+python scripts/secrets.py staged
+
+# -vは付けない。開発DBのnamed volumeを保持
+docker compose --profile test down
+```
+
+今回migration追加はありません。既存3本のmigrationが適用済みなら開発DBへの追加操作は不要です。テストはガード済みtest-dbのランダムschemaへ3本を適用し、終了時そのschemaだけを削除します。dev-dbへの接続・migration・初期化は今回実施していません。HTTPサーバー2プロセスとCookieクライアントはコンテナ内で自動起動し、ホストへのポート公開・PHP/curl導入は不要です。テスト用架空資格情報・障害注入routerは公開デモseedや配布資格情報と別です。
+
+| 検証 | 結果 |
+| --- | --- |
+| 全体回帰・再実行 | **193テスト・2,707アサーション、終了コード0**。Users 62 / 101、Authentication 21 / 544、Requests 72 / 1,023、Workflow 38 / 1,039。既存155テストを維持 |
+| 検査追加の経緯 | Workflow初回38 / 1,034成功、全体193 / 2,702成功。その後「停止した同一担当への変更も409」と成功時updated_atの確認を補強し、最終版の全体193 / 2,707成功 |
+| 業務・認証 | 有効IT候補・20件ページング、担当変更/解除、16状態組合せ、停止担当の修復、社員403/他人404、CSRF/失効/保護項目、拒否時全業務列不変 |
+| 同時更新 | 異なるIT/セッション/HTTPプロセス/DB接続。同じ版から担当同士・状態同士・相互で200/409。同期点とpg_stat_activityで待機を観測し、versionが一度だけ増加 |
+| 停止競合とrollback | 割り当て先行では停止が待機、停止先行lock中は503・停止確定後は422。session保存失敗503とUPDATE後例外500で担当/状態/version/updated_at全てrollback |
+| データ保全 | 再実行前にtest-db publicへ置いた確認行id=28が再実行後も保持。一時schema残存0、確認表は検証後撤去。DB_HOST=dev-dbは接続前に終了コード1で拒否（意図した失敗） |
+| 既存版・構成 | PHP8.4.25 / Laravel13.32.0 / Sanctum4.3.3 / Composer2.10.3 / PostgreSQL18.6 / PHPUnit13.3.4を維持。lock・既存migration・DB接続先ガード・Docker構成は変更なし |
+| 文書・秘密情報 | ローカルリンク175件、FR/AC・API/状態/権限・採用範囲、作業ツリー/indexのgit diff --check、新規ファイルの末尾空白を確認。Gitleaks files / stagedは検出なし（stagedは差分0）。ignore対象の追跡ファイルなし。秘密情報検査の設定・workflow・フックは変更なし |
+
+CIにはWorkflow suiteを追加し、全suiteの再実行・contents:read・既存check名Users PostgreSQL・Gitleaksを維持しました。GitHub上の対象コミット・実行URL・結果は未確認で、CI成功とは扱いません。必須チェック設定はworkflow追加と別途確認が必要です。ローカルのcommit・pushは実施していません。
+
+未実装/未検証：コメント・AC-14のコメント投稿対完了、React、公開デモseed、AWS、CloudFront/実HTTPS・公開DB権限分離・負荷/公開worker終了/通信断のtimeout。候補usersのNOWAITは停止競合の循環待機を避ける代わりに503を返す場合があり、画面では自動再送せず最新詳細を確認する設計です。

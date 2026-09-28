@@ -17,4 +17,7 @@ Route::middleware(AuthenticatedSession::class)->group(function () {
     Route::post('/api/requests', [App\Http\ServiceRequestController::class, 'store']);
     Route::get('/api/requests', [App\Http\ServiceRequestController::class, 'index']);
     Route::get('/api/requests/{request_id}', [App\Http\ServiceRequestController::class, 'show']);
+    Route::get('/api/requests/{request_id}/assignee-candidates', [App\Http\RequestWorkflowController::class, 'candidates']);
+    Route::patch('/api/requests/{request_id}/assignee', [App\Http\RequestWorkflowController::class, 'assignee']);
+    Route::patch('/api/requests/{request_id}/status', [App\Http\RequestWorkflowController::class, 'status']);
 });
