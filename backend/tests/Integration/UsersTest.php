@@ -19,7 +19,7 @@ final class UsersTest extends DatabaseTestCase
     {
         self::assertSame('pgsql', DB::connection()->getDriverName());
         self::assertSame(0, User::count());
-        self::assertSame(3, DB::table('migrations')->count());
+        self::assertSame(4, DB::table('migrations')->count());
         $columns = collect(DB::select('SELECT column_name, data_type, is_identity, identity_generation, datetime_precision FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?', ['users']))->keyBy('column_name');
         self::assertSame('bigint', $columns['id']->data_type);
         self::assertSame('YES', $columns['id']->is_identity);

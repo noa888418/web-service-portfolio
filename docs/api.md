@@ -2,7 +2,7 @@
 
 ## 状態・共通契約
 
-2026-09-27に認証API-01～04、依頼登録/一覧/コメントを除く詳細API-05～07を実装しました。09-28にはFR-06/07・AC-14の更新競合を採用し、担当候補/担当変更/状態変更API-08～10も実装しました。コメントAPI-11/12は提案・未実装です。認証はSanctum Cookie、PostgreSQL session、無操作30分・絶対8時間、正規化メール5回/IP30回（各60秒）を維持します。[担当/状態の実装](request-workflow.md)、[依頼API](requests.md)、[認証記録](authentication.md)、[開発手順](development.md)を参照してください。
+2026-09-27に認証API-01～04と依頼API-05～07、09-28に担当/状態API-08～10を実装しました。続く今回の工程でFR-05/08・AC-14のコメントを採用し、API-11/12も実装しています。認証はSanctum Cookie、PostgreSQL session、無操作30分・絶対8時間、正規化メール5回/IP30回（各60秒）を維持します。[コメント実装](comments.md)、[担当/状態](request-workflow.md)、[依頼API](requests.md)、[認証記録](authentication.md)、[開発手順](development.md)を参照してください。
 
 2026-09-22 作成、09-27認証部分を更新。[DB](database.md)がコード・型の定義元、[画面](screens.md)が呼出元、[横断対応表](design-review.md)がFR / ACの追跡先です。JWT、一般会員登録、編集・削除、役割変更APIは提供しません。FR-09はDB文書のOPS-02 / OPS-03へ対応付けます。
 
@@ -59,7 +59,7 @@
 
 最小の利用者参照は `UserRef={id,display_name}`、ログイン本人だけ `CurrentUser={id,display_name,role}`。メール・is_active・auth_version は不要なので返しません。`RequestSummary={id,title,category,requester,assignee,status,version,created_at}`。`assignee` は UserRef または null。`RequestDetail` は Summary に body・updated_at を追加。`Comment={id,body,author,created_at}` で、親は URL から分かるため親 ID を重複返却しません。
 
-一覧・コメント・担当候補は `page` だけ指定可（省略1、先頭ゼロなしの十進正整数、上限2147483647）。20件固定。成功はdata配列とmeta={current_page,per_page,total,last_page}、last_pageは最小1、範囲外は200 + 空配列。本人に許可されたqueryからtotalを求め、他人の件数を含めません。実装済みの依頼一覧・担当候補はCTEからCOUNTとページ行を単一SELECTで取得し、READ COMMITTEDでも同じsnapshotを使います。認証・session保存のtransaction途中でREAD ONLY / REPEATABLE READへ変更する旧案は採用しません（[理由](requests.md)）。別ページ間の挿入によるずれは許容します。コメントは未実装です。
+一覧・コメント・担当候補は `page` だけ指定可（省略1、先頭ゼロなしの十進正整数、上限2147483647）。20件固定。成功はdata配列とmeta={current_page,per_page,total,last_page}、last_pageは最小1、範囲外は200 + 空配列。本人に許可されたqueryからtotalを求め、他人の件数を含めません。依頼一覧・コメント・担当候補はCTEからCOUNTとページ行を単一SELECTで取得し、READ COMMITTEDでも同じsnapshotを使います。認証・session保存のtransaction途中でREAD ONLY / REPEATABLE READへ変更する旧案は採用しません（[理由](requests.md)）。別ページ間の挿入によるずれは許容します。
 
 依頼は created_at DESC, id DESC、コメントは created_at ASC, id ASC、担当候補は id ASC。cursor・sort・件数変更機能は追加しません。UI でコードは日本語ラベルへ対応付けます。
 
@@ -67,7 +67,9 @@
 
 全APIの追加項目拒否・共通エラー・非キャッシュは上記を継承します。保護APIは**有効な社員 / IT担当者セッション**が前提です。更新後データから応答を組み立て、session保存・外側commit成功後に送信します。
 
-API-05～07もweb / CSRF / AuthenticatedSessionを共有します。API-06は認証時のusers共有lockを維持してINSERTし、応答を組み立てた後、session保存と外側commitの成功後に送信します。controller終了をcommitとは扱いません。session保存失敗や途中の5xxでは登録もrollbackします。詳細JSONにcommentsは追加せず、FR-05のコメント部分は未実装として残します。
+API-05～07もweb / CSRF / AuthenticatedSessionを共有します。API-06は認証時のusers共有lockを維持してINSERTし、応答を組み立てた後、session保存と外側commitの成功後に送信します。controller終了をcommitとは扱いません。session保存失敗や途中の5xxでは登録もrollbackします。詳細JSONにcommentsは追加せず、専用API-11でページ単位に取得します。
+
+API-11/12も同じmiddlewareを共有します。GETは事前の親閲覧確認後、認可付き親・COUNT・子/投稿者取得を単一SELECTで再検査します。POSTは本文bodyだけを受け付け、expected_versionは不要（追加した場合422）、保護項目は403。本人users共有lock → 親FOR UPDATE → 最新の閲覧権/未完了を再確認 → 本人を投稿者にしてINSERT → session保存 → 外側commit → 201の順です。親version/updated_atは更新しません。完了後投稿409、完了後閲覧可、編集/削除・内部限定は未提供です。[競合・rollback検証](comments.md)を参照してください。
 
 API-08～10も同じ認証/CSRF/外側transactionを共有します。認証本人users共有lockの後、PATCHは現担当/新候補をFOR SHARE NOWAIT、親をFOR UPDATEし、権限・版・状態・有効性を再確認します。追加usersのlock競合は503、停止確定後の別候補指定は422、親の版不一致は409。事前読取から担当が変化した場合も409です。版→完了→同一値/候補/遷移の順で判定し、同一担当は停止済みでも409 no_change。更新が必要でversion最大値なら500で無変更を維持します。[理由と実測](request-workflow.md)を参照してください。
 

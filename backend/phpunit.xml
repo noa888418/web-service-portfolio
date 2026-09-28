@@ -18,5 +18,8 @@
         <testsuite name="Workflow">
             <directory>tests/Workflow</directory>
         </testsuite>
+        <testsuite name="Comments">
+            <directory>tests/Comments</directory>
+        </testsuite>
     </testsuites>
 </phpunit>

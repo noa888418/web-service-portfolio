@@ -1,6 +1,6 @@
 # DB・API・画面の横断設計レビュー
 
-2026-09-22作成、09-28更新。users・認証・依頼登録/閲覧に続きFR-06/07とAC-14の更新競合を採用し、API-08～10を実装しました。[担当/状態の実装・テスト対応](request-workflow.md)、[依頼API](requests.md)を参照してください。コメント・画面・AWSは未実装で、未採用の詳細は提案のままです。[要件](requirements.md)、[DB](database.md)、[API](api.md)、[画面](screens.md)、[セキュリティ](security.md)、[認証実装](authentication.md)と合わせて参照します。
+2026-09-22作成、09-28更新。認証・依頼・担当/状態に続き、FR-05のコメント閲覧・FR-08の投稿・AC-14の投稿対完了を採用し、API-11/12を実装しました。[コメントの実装・テスト対応](comments.md)、[担当/状態](request-workflow.md)、[依頼API](requests.md)を参照してください。画面・公開seed・AWSは未実装です。[要件](requirements.md)、[DB](database.md)、[API](api.md)、[画面](screens.md)、[セキュリティ](security.md)、[認証実装](authentication.md)と合わせて参照します。
 
 ## FR → 画面 → API / 管理手順 → テーブル
 
@@ -78,7 +78,7 @@ ID 例は A=1、B=2、X=3、Y=4。以下は実行結果ではなく、設計に�
 
 ## 検証の境界と予定
 
-下表の既存検証に、今回の担当/状態APIのAC-07～11・14・18と原子性/停止競合を追加します。[今回の対応](request-workflow.md)、[登録/閲覧の対応](requests.md)を参照してください。FR-05のコメント、AC-14のコメント対完了、画面のAC-13、AWSのAC-19は引き続き未検証です。
+下表の既存検証に、今回のコメントAPIのAC-05～09・12～15・18と原子性/完了競合を追加します。[コメントの対応](comments.md)を参照してください。画面のAC-13、AWSのAC-19、初期投入は引き続き未検証です。
 
 | 区分 | 検証内容 | 今回の状態 |
 | --- | --- | --- |
@@ -87,8 +87,9 @@ ID 例は A=1、B=2、X=3、Y=4。以下は実行結果ではなく、設計に�
 | 認証API / 実PostgreSQL | 4 API、401/403/419/422/429/503、期限・停止、共通error、保護項目、Cookie / CSRF、no-store、並行session保存対logout/停止、counter原子性、lock競合timeout | Authentication 21テスト。既存Usersと合わせ83テスト・645アサーション成功。別HTTPプロセス・同期点・制御時計を使用。[詳細](authentication.md) |
 | 依頼登録/一覧/詳細 / 実PostgreSQL・HTTP | API-05～07、保存制約・認可・入力・ページング・CSRF・失効・失敗rollback・停止とのcommit順 | Requests 72テスト・1,011アサーション。全体155 / 1,656、再実行成功。[対応と境界](requests.md) |
 | 担当/状態更新 / 実PostgreSQL・HTTP | API-08～10、Policy・候補・16遷移・版競合、停止競合、session失敗/UPDATE後例外のrollback | Workflow suite。別IT・別Cookie・2 HTTP workerと同期点を使用。[最新の件数・結果](development.md) |
-| Laravel / React（残り） | コメントPolicy/入力、二重操作、画面遷移・keyboard / focus / XSS | 未実施、コメント・画面実装後 |
-| 実PostgreSQL（残り） | 同時INSERTのメール競合、コメントのFK / CHECK / NULL・子削除、投稿対完了、seed同時実行/途中失敗/no-op | 未実施。担当/状態の競合成功をコメントの整合性の合格に広げない |
+| コメント / 実PostgreSQL・HTTP | API-11/12、FK/NOT NULL/CHECK、親削除CASCADE/投稿者RESTRICT、認可・本文・ページング、投稿対完了の両順序・2投稿、保存失敗rollback | Comments 43テスト・769アサーション成功。全体236 / 3,488。別利用者/別Cookie/2 HTTP worker・同期点を使用。[詳細](comments.md) |
+| Laravel / React（残り） | 二重操作、画面遷移・keyboard / focus / XSS、通信結果不明の表示 | 未実施、画面実装後 |
+| 実PostgreSQL（残り） | 同時INSERTのメール競合、seed同時実行/途中失敗/no-op、公開DB権限分離 | 未実施。コメントの局所的なDB/HTTP検証を公開運用の成功に広げない |
 | ローカル結合（残り） | Reactとの統合、通信切断で結果不明時の非再送、実HTTPS | 未実施。現在はcURLのCookieクライアントと実HTTPサーバーによる認証フローを検証 |
 | AWS 実機 | CloudFront標準TLSとorigin経路、Cookie/Header転送、A/Bのcache混在なし、SG直アクセス拒否、proxy/IP/HTTPS判定、RDS TLS、OIDC、秘密注入、snapshot復元と7日削除、閉鎖・失効・課金対象撤去、メモリ/ハッシュ負荷 | 未実施。ローカルDBテストでは代替できない |
 
@@ -96,10 +97,10 @@ AC-19 は Laravel の no-store 単体確認だけで合格にしません。Acti
 
 ## 重要な未決定事項と最初の実装単位
 
-1. **残る業務案の採否**：コメントの投稿/閲覧・完了後禁止・編集/削除なしをレビューする。IT全員の担当外操作・完了判断・再開なしは今回採用済み。
+1. **画面・初期投入の採否**：4画面の操作性と公開デモ投入手順をレビューする。コメントの閲覧/投稿・完了後禁止・編集/削除なしは今回採用済み。
 2. **公開の詳細**：資格情報の配布経路、信頼proxy/IP判定、公開FPMのtimeout・単一taskの性能を確定・検証する。認証期限・試行制限値とローカル対応版は採用済み。
 3. **リリース条件**：依存関係/イメージ/IaC検査のツールと停止基準、必要なCI必須チェック、予算通知先を決める。
 
-今回のレビュー単位は①担当候補・担当/状態APIと入力/認可、②追加users NOWAIT・親lock・session commit境界、③競合/rollbackテスト・CI・文書です。次はコメントの最小APIと親の完了競合を同じ単位で実装・検証する案です。
+今回のレビュー単位は①comments追加migration・モデル、②コメントAPI・認可/入力・親lockとsession commit、③制約/競合/rollbackテスト・CI・文書です。次工程では画面の最小機能または公開投入のうち一つに絞って採用範囲を確認します。
 
 09-28の設計調整：旧「全usersをID順」は認証が本人lockを先に取る実装と不整合でした。認証順序を維持し、追加の現担当/新候補はID順のFOR SHARE NOWAIT、親はFOR UPDATEへ変更しました。停止lock中は503で取消し、確定後の不正候補422・依頼の版競合409と区別します。候補一覧も「全処理同一snapshot」から「親共有lockで状態保持、候補/件数の単一SELECT」へ具体化しました。理由・可用性の制約は [実装記録](request-workflow.md)に記載しています。

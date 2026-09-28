@@ -20,4 +20,6 @@ Route::middleware(AuthenticatedSession::class)->group(function () {
     Route::get('/api/requests/{request_id}/assignee-candidates', [App\Http\RequestWorkflowController::class, 'candidates']);
     Route::patch('/api/requests/{request_id}/assignee', [App\Http\RequestWorkflowController::class, 'assignee']);
     Route::patch('/api/requests/{request_id}/status', [App\Http\RequestWorkflowController::class, 'status']);
+    Route::get('/api/requests/{request_id}/comments', [App\Http\CommentController::class, 'index']);
+    Route::post('/api/requests/{request_id}/comments', [App\Http\CommentController::class, 'store']);
 });

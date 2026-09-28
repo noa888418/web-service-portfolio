@@ -2,9 +2,9 @@
 
 ## 状態・参照
 
-**2026-09-28の追加採用**：users・認証管理表・service_requestsに続き、FR-06/07とAC-14の担当/状態更新を実装しました。既存migration・カラム・制約は変更せず、Laravelの認可・遷移・版照合で保証する操作を追加しています。コメント・demo_seed_runs・公開用Web DB roleは未実装です。[担当/状態の実装](request-workflow.md)、[依頼実装](requests.md)、[認証実装](authentication.md)を参照してください。
+**2026-09-28の追加採用**：users・認証管理表・service_requests・担当/状態に続き、commentsの追加migrationとFR-05のコメント閲覧・FR-08の投稿・AC-14の投稿対完了を実装しました。既存migrationは変更していません。demo_seed_runs・公開用Web DB roleは未実装です。[コメント実装](comments.md)、[担当/状態](request-workflow.md)、[依頼実装](requests.md)、[認証実装](authentication.md)を参照してください。
 
-2026-09-22作成、09-28更新。[要件](requirements.md)のFR-01～FR-09を具体化する設計です。コメント・管理投入等は引き続き提案です。デモ運用前提は [基本設計](architecture.md)、実行手順・採用版・検証記録は [開発環境](development.md)、[API](api.md)、[画面](screens.md)、[対応表](design-review.md)を参照してください。
+2026-09-22作成、09-28更新。[要件](requirements.md)のFR-01～FR-09を具体化する設計です。管理投入・公開運用等は引き続き提案です。デモ運用前提は [基本設計](architecture.md)、実行手順・採用版・検証記録は [開発環境](development.md)、[API](api.md)、[画面](screens.md)、[対応表](design-review.md)を参照してください。
 
 ### 今回の採用範囲とLaravel標準との差分
 
@@ -91,7 +91,7 @@ erDiagram
 
 ## service_requests
 
-この表の保存項目・制約は今回のmigrationで実装しました。公開する操作は登録・一覧・詳細のみです。assignee関連列・4状態の値制約は既存設計と後続参照の整合を保つためであり、担当変更・状態遷移の承認やAPI実装を意味しません。
+この表の保存項目・制約は依頼工程のmigrationで実装済みです。その後、担当変更・状態遷移も採用・実装しました。今回のコメント投稿はこの表をlockして読むだけで、version/updated_atを含め更新しません。
 
 | カラム | 型 | NULL | 既定 | 制約・用途 |
 | --- | --- | --- | --- | --- |
@@ -112,6 +112,8 @@ erDiagram
 DB は「対応開始後の担当者あり」と「担当者の役割」を保証します。**状態の遷移順、現在操作中の利用者の権限、担当候補の有効性、完了後の不変性は Laravel の業務処理で保証**します。全依頼に CHECK を満たすだけではこれらを保証できません。停止した担当者を過去の依頼から消さず、未完了なら別の有効 IT担当者へ変更します。停止者が割り当てられたままの状態変更を409とする仕様は09-28に採用・実装済みです。
 
 ## comments
+
+今回の [追加migration](../backend/database/migrations/2026_09_28_000001_create_comments_table.php)で下表とindexを実装しました。通常の差分migrationであり、既存users・依頼データを初期化しません。親削除CASCADEは管理操作用で、Webに編集/削除APIを追加しません。
 
 | カラム | 型 | NULL | 既定 | 制約・用途 |
 | --- | --- | --- | --- | --- |
@@ -174,7 +176,7 @@ PostgreSQLのFOR SHAREにも対象表の少なくとも1列のUPDATE権限が必
 
 親行の待機には既存lock_timeout=5秒・statement_timeout=10秒が適用されます。要求全体やネットワーク断の時間上限の保証ではありません。DB transaction内の外部HTTP呼出・UI待ちは禁止し、通信結果不明時も無条件に再送しません。[公式根拠・並行処理の実測範囲](request-workflow.md)を参照してください。
 
-**コメントの未実装案**：expected_versionを要求せず、本人users → 親FOR UPDATEで未完了・閲覧権を再確認してINSERT、親version/updated_atは変更しません。投稿が先なら投稿commit後に完了でき、完了が先なら投稿409とする案です。この投稿対完了のロック整合性・競合試験は次のコメント工程で実施します。
+**コメントの採用・実装済み手順**：expected_versionを要求せず、本人users共有lock → 親FOR UPDATEで最新の未完了・閲覧権を再確認してINSERT → session保存 → 外側commitです。親version/updated_atは変更しません。投稿が先なら投稿commit後に完了、完了が先なら投稿409、2投稿は両方保存します。別利用者・別session・別HTTPプロセス/DB接続と明示的同期点で3順序を検証します。GETは認可付き親・件数・コメント行を単一SELECTで読みます。[検証の詳細](comments.md)を参照してください。
 
 ## 管理手順とデータの寿命
 
@@ -200,4 +202,4 @@ PostgreSQLのFOR SHAREにも対象表の少なくとも1列のUPDATE権限が必
 
 2026-09-22 に [PostgreSQL 制約](https://www.postgresql.org/docs/current/ddl-constraints.html)、[行ロック](https://www.postgresql.org/docs/current/explicit-locking.html)、[分離レベル](https://www.postgresql.org/docs/current/transaction-iso.html)、[Laravel Session](https://laravel.com/docs/13.x/session)、[Cache](https://laravel.com/docs/13.x/cache)、[Hashing](https://laravel.com/docs/13.x/hashing)を参照しました。ローカル採用版はLaravel13 / PostgreSQL18です。冒頭で採用済みとした部分以外のコメント・投入・公開運用等は本サービスの提案です。認証のtimeoutの検証範囲は [認証記録](authentication.md)を参照してください。
 
-users・認証・依頼登録/閲覧に続き、担当/状態の版競合、担当停止との競合、session保存失敗・更新後例外のrollbackを実PostgreSQL / HTTPで検証しました。コメントと完了の並行処理・seedは [横断検証計画](design-review.md)の未実施項目です。今回の成功をFR / AC全体やAWS経路の合格にしません。
+users・認証・依頼・担当/状態に続き、コメントの制約/認可/入力/ページング、完了との両順序・2投稿、session保存失敗・INSERT後例外のrollbackを実PostgreSQL / HTTPで検証しました。seed・画面・AWSは [横断検証計画](design-review.md)の未実施項目です。今回の成功をFR / AC全体やAWS経路の合格にしません。

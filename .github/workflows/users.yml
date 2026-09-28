@@ -33,7 +33,9 @@ jobs:
         run: docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Requests
       - name: Test assignment and status concurrency separately
         run: docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Workflow
-      - name: Repeat all suites after workflow verification
+      - name: Test comments and completion concurrency
+        run: docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Comments
+      - name: Repeat all suites after comments verification
         run: docker compose --profile test run --rm test
       - name: Stop containers
         if: always()

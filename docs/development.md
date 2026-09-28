@@ -4,11 +4,11 @@
 
 React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsの使用は決定済みです。AWS月額予算は3,000円、構築から撤去まで月60時間程度、公開は事前案内期間のみ。独自ドメインは未所有です。
 
-秘密情報検査、Laravel・users・認証・依頼登録/閲覧に続き、FR-06/07の担当/状態APIとAC-14の更新競合を実装しました。PHP / ComposerはDocker内で使用します。コメント・React・公開デモseed・Terraform・AWSは今回の対象外です。Pythonは検査・ローカル設定生成の補助用です。過去の日付の検証記録は当時の結果を維持し、最新結果は末尾の09-28記録に分けます。
+秘密情報検査、Laravel・users・認証・依頼・担当/状態に続き、コメント閲覧/投稿と完了競合を実装しました。PHP / ComposerはDocker内で使用します。React・公開デモseed・Terraform・AWSは今回の対象外です。Pythonは検査・ローカル設定生成の補助用です。過去の検証記録は当時の結果を維持し、最新結果は末尾のコメント工程記録に分けます。
 
 AWS のサブネット・SG・Cookie セッション・キャッシュ・OIDC・撤去は [基本設計案](architecture.md)、公式料金と構築・検証・撤去を含む 60 時間の試算は [費用見積もり](costs.md)を参照してください。調査済みの仕様と実機での検証済み事項を区別します。
 
-DB・API・4画面は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、対応は [design-review.md](design-review.md)です。採用済みのusers保存設計と認証の実装差分は [authentication.md](authentication.md)に記録します。依頼・コメントの未承認の業務詳細、業務並行処理は次工程です。
+DB・API・4画面は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、対応は [design-review.md](design-review.md)です。認証の実装差分は [authentication.md](authentication.md)、今回のコメント採用範囲・並行処理は [comments.md](comments.md)に記録します。画面・初期投入・公開運用は次工程です。
 
 運用前提は架空データ専用、構築・検証6時間/公開48時間/閉鎖・保存・撤去等6時間（初月は検証に応じ公開短縮）。同期間は保持、次回公開は新DBへの初期投入。snapshot取得後7日・通常最新1世代、アプリログ7日・アクセスログ30日。作成者が公開終了時の資格情報・セッション失効と削除結果確認を担当します。誤投入は期限を待たず対応し、詳細はDB文書のOPS-01～OPS-07に従います。
 
@@ -204,7 +204,7 @@ docker compose --profile tools run --rm composer audit --locked --no-interaction
 
 依存更新を意図した作業だけ `docker compose --profile tools run --rm composer update` を実行し、composer.json / lock差分をレビューして再build・テストします。toolingだけがbackendをbind mountし、app / testはmountしません。Linuxでtoolingが書けない場合はホストのUID / 所有権を確認し、全員書込権限で解決しません。
 
-[users.yml](../.github/workflows/users.yml) はpush / pull_requestで同じDockerfile・lock・PostgreSQL imageを使い、platform確認、Composer audit、Users suite、Authentication suite、Requests suite、Workflow suite、全suite再実行を行います。既存のcheck名Users PostgreSQLを維持します。権限はcontents:readのみ。生成資格情報やDB内容をartifactに保存せず、AWS権限もありません。失敗を握りつぶさず後処理だけalways()で行います。[secrets.yml](../.github/workflows/secrets.yml) は変更せず維持します。
+[users.yml](../.github/workflows/users.yml) はpush / pull_requestで同じDockerfile・lock・PostgreSQL imageを使い、platform確認、Composer audit、Users・Authentication・Requests・Workflow・Commentsの各suiteと全suite再実行を行います。既存のcheck名Users PostgreSQLを維持します。権限はcontents:readのみ。生成資格情報やDB内容をartifactに保存せず、AWS権限もありません。失敗を握りつぶさず後処理だけalways()で行います。[secrets.yml](../.github/workflows/secrets.yml) は変更せず維持します。
 
 **users workflowはローカルと同じコマンドを設定した段階で、GitHubでの実行は未確認**です。push後にpush / PRの `Users PostgreSQL` と既存 `Gitleaks` のログ・SHA・成功 / 失敗伝播を確認し、Rulesets / branch protectionで両checkを必須にする作業を別途行います。workflow追加だけではマージ禁止になりません。
 
@@ -341,3 +341,46 @@ docker compose --profile test down
 CIにはWorkflow suiteを追加し、全suiteの再実行・contents:read・既存check名Users PostgreSQL・Gitleaksを維持しました。GitHub上の対象コミット・実行URL・結果は未確認で、CI成功とは扱いません。必須チェック設定はworkflow追加と別途確認が必要です。ローカルのcommit・pushは実施していません。
 
 未実装/未検証：コメント・AC-14のコメント投稿対完了、React、公開デモseed、AWS、CloudFront/実HTTPS・公開DB権限分離・負荷/公開worker終了/通信断のtimeout。候補usersのNOWAITは停止競合の循環待機を避ける代わりに503を返す場合があり、画面では自動再送せず最新詳細を確認する設計です。
+
+### コメント工程のWindows手順と記録（2026-09-28）
+
+FR-05のコメント閲覧、FR-08の投稿、AC-14の投稿対完了を採用し、[comments.md](comments.md)へ設計理由・API/FR/AC対応を記録しました。前工程の193テスト・2,707アサーション・終了コード0は利用者のWindowsでも確認済みです。今回追加分の利用者再実行やGitHub CI成功は未確認です。
+
+Docker DesktopをLinux containersで起動し、リポジトリのルートのPowerShellで1行ずつ実行します。各行直後の `$LASTEXITCODE` が非0なら停止して原因を確認してください。
+
+```powershell
+python scripts/setup_local.py
+docker compose build app
+docker compose --profile test up -d --wait test-db
+
+# 既存users・認証・依頼・担当/状態・コメントの全体検証
+docker compose --profile test run --rm test
+$LASTEXITCODE
+
+# コメントだけを切り分けたい場合
+docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Comments
+$LASTEXITCODE
+
+python scripts/secrets.py files
+python scripts/secrets.py staged
+docker compose --profile test down
+```
+
+downに `-v` は付けません。テストは専用test-dbと実行ごとのランダムschemaを使い、既存の接続先/role/DB識別ガードを変更していません。テスト用Cookie・パスワードはコンテナ内の架空fixture専用で、公開資格情報やseedではありません。ホストへHTTP/DBポートは公開せず、本番Secure Cookie設定を弱めていません。
+
+開発DBにcomments表を適用するときだけ、build後に既存手順の `docker compose up -d --wait dev-db` → `docker compose run --rm app php artisan migrate --force` を実行します。今回は既存3本を変更せず4本目の追加migrationなので、既存users・依頼を消しません。migrate:freshやseedは実行しません。今回の作業では開発DBに接続・migrationしていません。
+
+| 検証 | この作業環境での結果 |
+| --- | --- |
+| コメント単独 | Comments **43テスト・769アサーション、終了コード0** |
+| 全体回帰 | **236テスト・3,488アサーション、終了コード0**。Users 62 / 101、Authentication 21 / 544、Requests 72 / 1,035、Workflow 38 / 1,039、Comments 43 / 769 |
+| 既存テストの変更 | usersのmigration期待件数を3→4へ変更。コメントGETの旧404確認を、編集/削除の405・子パス404へ置換。新APIの認可・入力・状態検査はComments suite。既存193テストを維持 |
+| DB保存・追加migration | 直接SQLのFK/NOT NULL/長さCHECK、identity/UTC日時/index、親CASCADE/投稿者RESTRICT、モデルのmass assignment拒否を確認。専用schema内で追加migration前後の既存users/依頼保持も検証 |
+| API境界 | 本人/IT可・別社員404/件数非露出、投稿者偽装・保護項目、正規化/1～2000境界/不正値、タグ風文字列、0/20/21件・日時/ID順・範囲外、完了後閲覧/投稿409、CSRF/停止/期限/auth_version、親全列不変 |
+| 競合・rollback | 別利用者/別Cookie/別HTTP worker/DB接続・同期点。投稿先行201→完了200、完了先行200→投稿409、2投稿とも201。session保存失敗503・INSERT後例外500でコメント0・親不変 |
+| 保全・ガード | 全体実行前にtest-db publicへ置いた確認行id=28が保持。一時schema残存0、確認表は検証後撤去。DB_HOST=dev-dbは接続前に終了コード1で拒否（意図した失敗）。開発DB/named volumeは変更なし |
+| 文書・秘密情報 | ローカルリンク196件、FR/AC・権限/項目/状態・採用範囲、作業ツリー/indexのgit diff --check、新規ファイルの末尾空白を確認。Gitleaks files / stagedは検出なし（ステージ差分0）、ignore対象の追跡ファイルなし。Gitleaks設定・workflow・フックは変更なし |
+
+CIにComments suiteを追加し、全体再実行・contents:read・既存check名Users PostgreSQL・Gitleaksを維持しました。対象コミット・実行URL・結果を確認できていないためGitHub成功とは記録しません。必須チェック設定はworkflow追加とは別です。commit・pushは実施していません。
+
+未実装/未検証：ReactでのXSS非実行・操作性/二重送信/結果不明の案内、FR-09公開デモseed、Terraform・AWS、実HTTPS/CloudFront、公開DB権限分離・負荷・worker終了/通信断のtimeout。本文をJSON文字列として往復できる検証を、ブラウザーや公開経路全体の安全性保証に広げません。

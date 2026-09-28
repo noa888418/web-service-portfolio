@@ -19,6 +19,18 @@ Illuminate\Support\Carbon::setTestNow(Illuminate\Support\Carbon::createFromTimes
 // Failure/ordering injection exists only behind the test database + schema guard.
 $scenario = file_get_contents(getenv('AUTH_TEST_SCENARIO'));
 Illuminate\Support\Facades\DB::listen(function ($event) use ($scenario) {
+    $comment = str_starts_with($event->sql, 'insert into "comments"');
+    if ($comment && $scenario === 'fail_after_comment') {
+        throw new RuntimeException('fixture injected after comment');
+    }
+    if ($comment && $scenario === 'hold_after_comment') {
+        touch(getenv('AUTH_TEST_BARRIER').'.entered');
+        $deadline = microtime(true) + 12;
+        while (! is_file(getenv('AUTH_TEST_BARRIER').'.release')) {
+            if (microtime(true) >= $deadline) { throw new RuntimeException('Comment barrier timed out.'); }
+            usleep(10000);
+        }
+    }
     $update = str_starts_with($event->sql, 'update "service_requests"');
     $stop = str_starts_with($event->sql, 'update "users"');
     if ($update && $scenario === 'fail_after_update') {
