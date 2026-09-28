@@ -13,3 +13,8 @@ Route::get('/sanctum/csrf-cookie', function (Request $request) {
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/logout', [AuthController::class, 'logout']);
 Route::get('/api/me', [AuthController::class, 'me'])->middleware(AuthenticatedSession::class);
+Route::middleware(AuthenticatedSession::class)->group(function () {
+    Route::post('/api/requests', [App\Http\ServiceRequestController::class, 'store']);
+    Route::get('/api/requests', [App\Http\ServiceRequestController::class, 'index']);
+    Route::get('/api/requests/{request_id}', [App\Http\ServiceRequestController::class, 'show']);
+});

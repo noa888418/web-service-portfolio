@@ -29,6 +29,8 @@ jobs:
         run: docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Users
       - name: Test authentication via real HTTP and PostgreSQL
         run: docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Authentication
+      - name: Test request creation and scoped reads
+        run: docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Requests
       - name: Repeat all tests in the same database
         run: docker compose --profile test run --rm test
       - name: Stop containers

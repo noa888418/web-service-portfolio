@@ -1,6 +1,6 @@
 # DB・API・画面の横断設計レビュー
 
-2026-09-22作成、09-27更新。users保存設計に加えFR-01・FR-02の認証方針を採用し、実PostgreSQLとCookie HTTPで検証しました。認証4 API以外の業務API・画面・依頼・コメント・AWSは未実装 / 未検証で、業務詳細は引き続き提案です。[要件](requirements.md)、[DB](database.md)、[API](api.md)、[画面](screens.md)、[セキュリティ](security.md)、[認証実装](authentication.md)を参照してください。
+2026-09-22作成、09-27更新。users・認証に続きFR-03・FR-04・FR-05のコメントを除く詳細を採用し、API-05～07を実装しました。今回の [実装・テスト対応](requests.md)を参照してください。担当/状態変更・コメント・画面・AWSは未実装で、未採用の業務詳細は提案のままです。[要件](requirements.md)、[DB](database.md)、[API](api.md)、[画面](screens.md)、[セキュリティ](security.md)、[認証実装](authentication.md)と合わせて参照します。
 
 ## FR → 画面 → API / 管理手順 → テーブル
 
@@ -78,13 +78,16 @@ ID 例は A=1、B=2、X=3、Y=4。以下は実行結果ではなく、設計に�
 
 ## 検証の境界と予定
 
+下表の認証工程までの記録に、今回の依頼API検証を追加します。AC-04～09・13・15・18の今回部分は [requests.md](requests.md)へ対応付けています。FR-05のコメント、画面のAC-13、AWSのAC-19は引き続き未検証です。依頼者FK・担当複合FK・CHECK、登録とsessionの一括rollback、停止とのcommit順は今回の実DB検証対象で、担当更新・コメント対完了の並行処理とは区別します。
+
 | 区分 | 検証内容 | 今回の状態 |
 | --- | --- | --- |
 | 文書 | リンク、FR9件/AC19件の対応、API12件/画面4件/OPS7件、コード・権限・全遷移、例のJSON、既存差分・秘密情報検査 | 今回の確認対象。実行結果は作業報告に記録 |
 | users / 実PostgreSQL | 空schemaへのmigration、役割2種、正規化・一意性、直接INSERTのCHECK / NOT NULL、既定値・停止状態、UNIQUE(id, role)参照、JSON非公開、接続先ガードと再実行の保全 | 62テスト・101アサーション成功。[開発記録](development.md)。FR-01 / FR-09の保存基盤のみ、AC全体の合格ではない |
 | 認証API / 実PostgreSQL | 4 API、401/403/419/422/429/503、期限・停止、共通error、保護項目、Cookie / CSRF、no-store、並行session保存対logout/停止、counter原子性、lock競合timeout | Authentication 21テスト。既存Usersと合わせ83テスト・645アサーション成功。別HTTPプロセス・同期点・制御時計を使用。[詳細](authentication.md) |
+| 依頼登録/一覧/詳細 / 実PostgreSQL・HTTP | API-05～07、保存制約・認可・入力・ページング・CSRF・失効・失敗rollback・停止とのcommit順 | Requests 72テスト・1,011アサーション。全体155 / 1,656、再実行成功。[対応と境界](requests.md) |
 | Laravel / React（残り） | 業務Policy全組合せ、404/409、依頼入力境界、二重操作、画面遷移・keyboard / focus / XSS | 未実施、業務・画面実装後 |
-| 実PostgreSQL（残り） | 同時INSERTのメール競合、依頼・コメントの複合FK / CHECK / NULL・子削除、同一snapshotの件数、2接続のversion更新・投稿対完了・担当停止、seed同時実行/途中失敗/no-op | 未実施。認証の並行検証を業務整合性の合格に広げない |
+| 実PostgreSQL（残り） | 同時INSERTのメール競合、コメントのFK / CHECK / NULL・子削除、担当/状態のversion更新・投稿対完了・担当停止、seed同時実行/途中失敗/no-op | 未実施。今回の登録・閲覧の検証を担当変更やコメントの整合性の合格に広げない |
 | ローカル結合（残り） | Reactとの統合、通信切断で結果不明時の非再送、実HTTPS | 未実施。現在はcURLのCookieクライアントと実HTTPサーバーによる認証フローを検証 |
 | AWS 実機 | CloudFront標準TLSとorigin経路、Cookie/Header転送、A/Bのcache混在なし、SG直アクセス拒否、proxy/IP/HTTPS判定、RDS TLS、OIDC、秘密注入、snapshot復元と7日削除、閉鎖・失効・課金対象撤去、メモリ/ハッシュ負荷 | 未実施。ローカルDBテストでは代替できない |
 
@@ -92,8 +95,8 @@ AC-19 は Laravel の no-store 単体確認だけで合格にしません。Acti
 
 ## 重要な未決定事項と最初の実装単位
 
-1. **業務案の採否**：社員だけの登録、IT全員の担当外操作・完了判断、編集/削除/再開なし、入力上限をレビューする。
+1. **残る業務案の採否**：IT全員の担当外操作・完了判断、コメント、編集/削除/再開なしをレビューする。今回の社員登録・閲覧範囲・依頼入力上限は採用済み。
 2. **公開の詳細**：資格情報の配布経路、信頼proxy/IP判定、公開FPMのtimeout・単一taskの性能を確定・検証する。認証期限・試行制限値とローカル対応版は採用済み。
 3. **リリース条件**：依存関係/イメージ/IaC検査のツールと停止基準、必要なCI必須チェック、予算通知先を決める。
 
-usersに続き、FR-01 / FR-02の認証APIと検証を実装しました。今回のレビュー単位は①管理表・Sanctum・Cookie設定、②認証/期限/排他/試行制限、③実HTTPテスト・CI・文書です。次工程では業務案の採否を確認したうえでservice_requestsの保存制約を小さな単位として実装できます。今回その承認・実装は行いません。
+users・認証に続き、今回のレビュー単位は①service_requests保存制約、②登録・スコープ付き一覧/詳細とsession commit境界、③DB/HTTPテスト・CI・文書です。担当/状態変更・コメントは次工程で採否を確認します。

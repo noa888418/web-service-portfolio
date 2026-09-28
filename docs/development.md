@@ -4,7 +4,7 @@
 
 React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsの使用は決定済みです。AWS月額予算は3,000円、構築から撤去まで月60時間程度、公開は事前案内期間のみ。独自ドメインは未所有です。
 
-秘密情報検査、Laravel・users・実PostgreSQLの基盤に加え、09-27にFR-01・FR-02の認証HTTP APIを実装しました。PHP / ComposerはDocker内で使用します。React・依頼・コメント・Terraform・AWSは対象外です。Pythonは検査・ローカル設定生成の補助用です。
+秘密情報検査、Laravel・users・認証HTTP APIに続き、FR-03・FR-04・FR-05のコメントを除く依頼APIを実装しました。PHP / ComposerはDocker内で使用します。担当/状態変更・コメント・React・Terraform・AWSは今回の対象外です。Pythonは検査・ローカル設定生成の補助用です。
 
 AWS のサブネット・SG・Cookie セッション・キャッシュ・OIDC・撤去は [基本設計案](architecture.md)、公式料金と構築・検証・撤去を含む 60 時間の試算は [費用見積もり](costs.md)を参照してください。調査済みの仕様と実機での検証済み事項を区別します。
 
@@ -204,7 +204,7 @@ docker compose --profile tools run --rm composer audit --locked --no-interaction
 
 依存更新を意図した作業だけ `docker compose --profile tools run --rm composer update` を実行し、composer.json / lock差分をレビューして再build・テストします。toolingだけがbackendをbind mountし、app / testはmountしません。Linuxでtoolingが書けない場合はホストのUID / 所有権を確認し、全員書込権限で解決しません。
 
-[users.yml](../.github/workflows/users.yml) はpush / pull_requestで同じDockerfile・lock・PostgreSQL imageを使い、platform確認、Composer audit、Users suite、Authentication suite、全suite再実行を行います。既存のcheck名Users PostgreSQLを維持します。権限はcontents:readのみ。生成資格情報やDB内容をartifactに保存せず、AWS権限もありません。失敗を握りつぶさず後処理だけalways()で行います。[secrets.yml](../.github/workflows/secrets.yml) は変更せず維持します。
+[users.yml](../.github/workflows/users.yml) はpush / pull_requestで同じDockerfile・lock・PostgreSQL imageを使い、platform確認、Composer audit、Users suite、Authentication suite、Requests suite、全suite再実行を行います。既存のcheck名Users PostgreSQLを維持します。権限はcontents:readのみ。生成資格情報やDB内容をartifactに保存せず、AWS権限もありません。失敗を握りつぶさず後処理だけalways()で行います。[secrets.yml](../.github/workflows/secrets.yml) は変更せず維持します。
 
 **users workflowはローカルと同じコマンドを設定した段階で、GitHubでの実行は未確認**です。push後にpush / PRの `Users PostgreSQL` と既存 `Gitleaks` のログ・SHA・成功 / 失敗伝播を確認し、Rulesets / branch protectionで両checkを必須にする作業を別途行います。workflow追加だけではマージ禁止になりません。
 
@@ -254,6 +254,8 @@ docker compose --profile test down
 
 ### 認証工程の検証記録（2026-09-27、未コミット作業ツリー）
 
+この83テスト・645アサーション・終了コード0は、その後利用者のWindowsでの再実行成功も確認済みです。GitHub CIの対象SHA・実行URLの証跡とは区別します。
+
 - 全suite：**83テスト・645アサーション、終了コード0**、同じDBで再実行も成功。個別のUsersは**62テスト・101アサーション**、Authenticationは**21テスト・544アサーション**で、ともに終了コード0。CSRFを無効化せず、actingAsでフローを省略していません。
 - 保全：専用test-dbのpublicへ検証専用行を置き、個別suiteと全suiteの実行後も保持、一時schema残存0を確認。作成した検証用表だけ確認後に撤去。既存接続先ガードは変更せず、開発DBは起動・変更していません。
 - 有効な2役割、共通認証失敗、session ID更新と旧Cookie拒否、logout、停止・auth_version、制御時計で30分/8時間の境界、試行枠5/30回・60秒回復・Retry-After、保護項目、最小JSON・Cookie属性・ログ秘匿を確認。
@@ -261,3 +263,37 @@ docker compose --profile test down
 - Composer audit：Sanctum追加後のlockに既知の脆弱性情報検出なし。既存依存の不要な更新はなし。
 - 修正した検証失敗：テスト補助メソッド名statusがPHPUnitのfinalメソッドと衝突したためassertResponseへ改名。実装の制約やCSRF・失敗判定を緩めていません。
 - 未検証：今回追加したActionsのGitHub実行・必須チェック、実HTTPS・CloudFront/proxy・Fargate負荷、DBネットワーク断/公開worker強制終了、期限切れsession/cacheの定期清掃。公開の資格情報配布・一括失効ジョブ、React・業務機能・AWSは未実装です。
+
+### 依頼API追加後のWindows手順と記録（2026-09-27）
+
+レビュー単位は①service_requestsの保存制約、②登録・閲覧・sessionと同じcommit境界、③HTTP/DBテスト・CI・文書です。[requests.md](requests.md)に採用範囲・FR/AC対応・設計変更の理由を記録しました。PHP/Laravel/Sanctum/PostgreSQL等の採用版・lock・Docker構成・DB接続先ガードは変更していません。
+
+Docker Desktopを起動し、ルートのPowerShellで以下を1行ずつ実行します。各行直後の `$LASTEXITCODE` が非0なら停止します。
+
+```powershell
+python scripts/setup_local.py
+docker compose build app
+docker compose --profile test up -d --wait test-db
+
+# users・認証・依頼をまとめて実行（通常はこちら）
+docker compose --profile test run --rm test
+$LASTEXITCODE
+
+# 依頼だけを切り分ける場合（CIにも同じsuiteを追加）
+docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Requests
+$LASTEXITCODE
+
+# 開発DBのvolumeは維持する。-vは付けない
+docker compose --profile test down
+```
+
+開発DBへservice_requestsを追加するときだけ、既存の起動手順に従い `docker compose up -d --wait dev-db` → `docker compose run --rm app php artisan migrate --force` を実行します。既存users/sessionを削除する操作はありません。今回の検証ではdev-dbを起動・変更せず、接続先ガード済みtest-dbのランダムschemaを使いました。HTTP fixtureは公開用seedや配布資格情報ではありません。
+
+- 全suite：**155テスト・1,656アサーション、終了コード0**。内訳はUsers 62 / 101、Authentication 21 / 544、Requests 72 / 1,011。既存テストはmigration件数の期待値2→3だけ変更し、検査を削除・無効化していません。
+- 再実行・保全：同じDBで全suiteを再実行し同じ結果。専用test-dbのpublicに置いた検証行を保持、一時schema残存0、確認用表は撤去済みです。DB_HOST=dev-dbの誤設定は接続前に終了コード1で拒否。dev-dbとnamed volumeは変更していません。
+- 文書・秘密情報：ローカルリンク148件の参照先、作業ツリー/indexのgit diff --check、新規ファイルの末尾空白を確認。Gitleaksのfiles / stagedは検出なし、ignore対象の追跡ファイルなし。Gitleaksの設定・workflow・既存フックは変更していません。
+- 正常系・異常系：A/B/X/Yの実Cookieログイン、所有者・初期値、登録権限、本人スコープ・同一404、保護項目、Unicode上限・不正値、0/20/21件・固定順・範囲外、CSRF、停止/失効を確認。SQLite・actingAs・CSRF無効化は使用していません。
+- commit境界：session書込をDB triggerで故意に失敗させ503・依頼0、INSERT後の非DB例外でも500・依頼0。別HTTP workerと同期点で、登録未commit時の別接続不可視、停止のusers lock待機、登録→session保存→commit→停止/失効を確認しました。
+- 修正したテストの誤り：PostgreSQLのRESTRICT拒否はSQLSTATE 23001（通常の参照先不存在23503とは別）。停止がsessionを削除した後の旧POSTはCSRF先行で419、GETは401。これらの期待値を既存契約に合わせ、正しいCSRF更新後のPOSTも401であることを追加確認しました。
+- GitHub CI：Requests suiteを既存workflowへ追加した段階です。対象コミットの実行URL・結果証跡がないため成功とは扱いません。check名Users PostgreSQLとGitleaksを維持し、必須チェック設定は別途確認します。
+- 未実施：担当/状態変更、FR-05のコメント、ReactでのHTML非実行・操作性、AWS/CloudFrontのAC-19、公開DB権限分離・性能測定。APIがタグ風文字列をJSONとして返すことと、ブラウザーでXSSが起きないことを区別します。

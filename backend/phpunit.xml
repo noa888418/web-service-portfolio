@@ -12,5 +12,8 @@
         <testsuite name="Authentication">
             <directory>tests/Auth</directory>
         </testsuite>
+        <testsuite name="Requests">
+            <directory>tests/Requests</directory>
+        </testsuite>
     </testsuites>
 </phpunit>

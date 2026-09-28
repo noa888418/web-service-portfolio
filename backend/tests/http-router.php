@@ -16,6 +16,26 @@ if ($app['db']->connection()->selectOne('SELECT current_schema() AS name')->name
 }
 $clock = getenv('AUTH_TEST_CLOCK');
 Illuminate\Support\Carbon::setTestNow(Illuminate\Support\Carbon::createFromTimestampUTC((int) file_get_contents($clock)));
+// Failure/ordering injection exists only behind the test database + schema guard.
+$scenario = file_get_contents(getenv('AUTH_TEST_SCENARIO'));
+Illuminate\Support\Facades\DB::listen(function ($event) use ($scenario) {
+    if (! str_starts_with($event->sql, 'insert into "service_requests"')) {
+        return;
+    }
+    if ($scenario === 'fail_after_insert') {
+        throw new RuntimeException('fixture injected after insert');
+    }
+    if ($scenario === 'hold_after_insert') {
+        touch(getenv('AUTH_TEST_BARRIER').'.entered');
+        $deadline = microtime(true) + 12;
+        while (! is_file(getenv('AUTH_TEST_BARRIER').'.release')) {
+            if (microtime(true) >= $deadline) {
+                throw new RuntimeException('Request insert barrier timed out.');
+            }
+            usleep(10000);
+        }
+    }
+});
 // Synchronization barriers exist only in this guarded test entrypoint.
 Illuminate\Support\Facades\Route::get('/_test/hold', function () {
     touch(getenv('AUTH_TEST_BARRIER').'.entered');

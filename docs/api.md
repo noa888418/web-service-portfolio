@@ -2,7 +2,7 @@
 
 ## 状態・共通契約
 
-2026-09-27にFR-01・FR-02の認証方針を採用し、API-01～API-04を実装しました。Sanctum Cookie認証、PostgreSQL session、無操作30分・絶対8時間、正規化メール5回/IP30回（各60秒）です。停止者拒否・auth_version・失効・CSRFを実HTTPで検証します。[認証の実装・検証記録](authentication.md)と[開発手順](development.md)を参照してください。API-05以降の業務仕様は提案・未実装のままです。
+2026-09-27にFR-01・FR-02の認証方針を採用し、API-01～API-04を実装しました。その後、FR-03・FR-04・FR-05のコメントを除く詳細を採用し、API-05～API-07も実装しました。API-08～API-12は提案・未実装です。認証はSanctum Cookie、PostgreSQL session、無操作30分・絶対8時間、正規化メール5回/IP30回（各60秒）を維持します。[依頼APIの実装・検証](requests.md)、[認証記録](authentication.md)、[開発手順](development.md)を参照してください。
 
 2026-09-22 作成、09-27認証部分を更新。[DB](database.md)がコード・型の定義元、[画面](screens.md)が呼出元、[横断対応表](design-review.md)がFR / ACの追跡先です。JWT、一般会員登録、編集・削除、役割変更APIは提供しません。FR-09はDB文書のOPS-02 / OPS-03へ対応付けます。
 
@@ -59,13 +59,15 @@
 
 最小の利用者参照は `UserRef={id,display_name}`、ログイン本人だけ `CurrentUser={id,display_name,role}`。メール・is_active・auth_version は不要なので返しません。`RequestSummary={id,title,category,requester,assignee,status,version,created_at}`。`assignee` は UserRef または null。`RequestDetail` は Summary に body・updated_at を追加。`Comment={id,body,author,created_at}` で、親は URL から分かるため親 ID を重複返却しません。
 
-一覧・コメント・担当候補は `page` だけ指定可（省略 1、十進正整数、上限 2147483647）。20 件固定。成功は `data` 配列と `meta={current_page,per_page,total,last_page}`、last_page は最小 1、範囲外は 200 + 空配列。本人に許可された query から total を求め、他人の件数を含めません。COUNT と当該ページ取得は短い READ ONLY / REPEATABLE READ transaction で同じ snapshot を使う案。別ページ要求の間の挿入によるずれは許容し、画面で再読込できます。
+一覧・コメント・担当候補は `page` だけ指定可（省略1、先頭ゼロなしの十進正整数、上限2147483647）。20件固定。成功はdata配列とmeta={current_page,per_page,total,last_page}、last_pageは最小1、範囲外は200 + 空配列。本人に許可されたqueryからtotalを求め、他人の件数を含めません。実装済みの依頼一覧は認可付きCTEからCOUNTとページ行を単一SELECTで取得し、READ COMMITTEDでも同じsnapshotを使います。認証・session保存のtransaction途中でREAD ONLY / REPEATABLE READへ変更する旧案は採用しません（[理由](requests.md)）。別ページ間の挿入によるずれは許容します。コメント・担当候補は未実装です。
 
 依頼は created_at DESC, id DESC、コメントは created_at ASC, id ASC、担当候補は id ASC。cursor・sort・件数変更機能は追加しません。UI でコードは日本語ラベルへ対応付けます。
 
 ## API 一覧
 
 全 API の追加項目拒否・共通エラー・非キャッシュは上記を継承します。保護 API は**有効な社員 / IT担当者セッション**が前提です。更新はコミットしたデータから応答を作ります。
+
+API-05～07もweb / CSRF / AuthenticatedSessionを共有します。API-06は認証時のusers共有lockを維持してINSERTし、応答を組み立てた後、session保存と外側commitの成功後に送信します。controller終了をcommitとは扱いません。session保存失敗や途中の5xxでは登録もrollbackします。詳細JSONにcommentsは追加せず、FR-05のコメント部分は未実装として残します。
 
 | API ID | method / path | FR / 主な AC | 認可・入力 | 成功・応答 | 個別エラー・transaction |
 | --- | --- | --- | --- | --- | --- |

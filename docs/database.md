@@ -2,9 +2,9 @@
 
 ## 状態・参照
 
-**2026-09-27の追加採用**：usersに加えFR-01・FR-02の認証とsessions / cache / cache_locksを実装しました。以下の09-22時点の採用範囲から認証部分だけを拡張しています。依頼・コメント・demo_seed_runs・公開用Web DB roleの設計は未承認・未実装のままです。[認証実装の詳細](authentication.md)を参照してください。
+**2026-09-27の追加採用**：users・認証管理表に続き、FR-03・FR-04・FR-05のコメントを除く詳細とservice_requestsの保存制約を実装しました。担当/状態変更・コメント・demo_seed_runs・公開用Web DB roleは未承認・未実装です。[依頼実装の詳細](requests.md)、[認証実装](authentication.md)を参照してください。
 
-2026-09-22作成、09-27更新。[要件](requirements.md)のFR-01～FR-09を具体化する設計です。09-22にusers保存設計を採用し、09-27に認証部分を追加採用しました。依頼・コメント・管理投入などの詳細は引き続きレビュー対象の提案です。デモ運用前提は [基本設計](architecture.md)、実行手順・採用版・検証記録は [開発環境](development.md)を参照してください。[API](api.md)、[画面](screens.md)、[対応表と設計レビュー](design-review.md)と合わせて参照します。
+2026-09-22作成、09-27更新。[要件](requirements.md)のFR-01～FR-09を具体化する設計です。users・認証に続いて依頼登録と閲覧部分を採用しました。担当/状態変更・コメント・管理投入等は引き続き提案です。デモ運用前提は [基本設計](architecture.md)、実行手順・採用版・検証記録は [開発環境](development.md)、[API](api.md)、[画面](screens.md)、[対応表](design-review.md)を参照してください。
 
 ### 今回の採用範囲とLaravel標準との差分
 
@@ -91,6 +91,8 @@ erDiagram
 
 ## service_requests
 
+この表の保存項目・制約は今回のmigrationで実装しました。公開する操作は登録・一覧・詳細のみです。assignee関連列・4状態の値制約は既存設計と後続参照の整合を保つためであり、担当変更・状態遷移の承認やAPI実装を意味しません。
+
 | カラム | 型 | NULL | 既定 | 制約・用途 |
 | --- | --- | --- | --- | --- |
 | id | bigint identity | 不可 | 自動採番 | PK、CHECK > 0 |
@@ -148,7 +150,7 @@ PK / UNIQUE の自動生成 index は重複作成しません。FK の参照側 
 
 ## 認可・競合・トランザクション
 
-書込は PostgreSQL READ COMMITTED、短いトランザクションを提案します（一覧のCOUNTと行取得はAPI文書のREAD ONLY / REPEATABLE READ）。RLSは初期案で導入せず、Policyと閲覧スコープを全APIで共有します。Web DB roleには業務3表のSELECT、依頼・コメントのINSERTと採番に必要な権限、依頼のassignee_id・status・version・updated_atの限定UPDATE、認証処理に必要な管理テーブル操作だけを許す案です。usersのINSERT・役割/パスワード/停止のUPDATE、業務DELETE、DDLは管理roleに分離します。
+実装済みの依頼登録は認証・session保存と同じREAD COMMITTED transactionを使います。一覧のCOUNTと行・関連表示名は単一SELECTの同一snapshotで取得し、途中で分離レベルを変更する旧案は採用しません。[調整理由とcommit順](requests.md)を参照してください。RLSは導入せず、登録Policyと共有の閲覧スコープで認可します。以下の公開DB権限分離は未実装の提案です：Web roleには業務3表のSELECT、依頼・コメントのINSERTと採番、依頼のassignee_id・status・version・updated_atの限定UPDATE、認証管理表操作だけを許可。usersのINSERT・役割/パスワード/停止のUPDATE、業務DELETE、DDLは管理roleへ分離します。
 
 PostgreSQLのFOR SHAREにも対象表の少なくとも1列のUPDATE権限が必要なため、**users.updated_atだけのUPDATE権限**をWeb roleへ追加する案です。この列を認証・認可の判断に使わず、role・is_active・auth_version・passwordは更新できないことを権限テストで確認します。通常のログインで勝手にパスワード再ハッシュ更新を試みないよう認証処理も照合します。[SELECTのロック権限](https://www.postgresql.org/docs/current/sql-select.html)を参照。想定外のDB制約違反は500と安全な調査記録にし、成功や空結果に変換しません。
 
@@ -160,7 +162,7 @@ PostgreSQLのFOR SHAREにも対象表の少なくとも1列のUPDATE権限が必
 | コメント | 親・投稿者存在、本文長 | 親の閲覧権、親行ロック後の completed 判定、投稿者を認証主体から設定 |
 | 競合 | 行ロック、原子的 commit / rollback | 取得した version と一致を要求し、不一致 409。入力を再適用しない |
 
-書込の順序は次のとおりです（すべての書込経路・管理処理で統一）。
+以下は未実装の担当/状態変更・コメントの書込手順案です。実装済みの登録は認証middlewareが取得したusers共有lockをsession保存まで保持し、既存依頼の親行lockや内側の独立commitを追加しません。今後の操作も外側session transactionのcommit境界と合わせて検証する必要があります。
 
 1. API 共通処理で CSRF・認証・閲覧・操作権・入力を確認。セッションロック取得は DB 業務トランザクションより前。ハッシュ生成・ネットワーク呼出は親行ロックの外で行う。
 2. transaction を開始し、操作する利用者と新規担当候補の users 行を **ID 昇順で FOR SHARE**。is_active・auth_version・role を再確認する。状態変更では事前読取した現担当者もこの組へ入れる。
@@ -196,4 +198,4 @@ PostgreSQLのFOR SHAREにも対象表の少なくとも1列のUPDATE権限が必
 
 2026-09-22 に [PostgreSQL 制約](https://www.postgresql.org/docs/current/ddl-constraints.html)、[行ロック](https://www.postgresql.org/docs/current/explicit-locking.html)、[分離レベル](https://www.postgresql.org/docs/current/transaction-iso.html)、[Laravel Session](https://laravel.com/docs/13.x/session)、[Cache](https://laravel.com/docs/13.x/cache)、[Hashing](https://laravel.com/docs/13.x/hashing)を参照しました。ローカル採用版はLaravel13 / PostgreSQL18です。09-27に追加採用した認証以外の独自列・制約・業務運用手順は本サービスの提案です。認証のtimeoutの検証範囲は [認証記録](authentication.md)を参照してください。
 
-usersの制約・保全に加え、09-27にsessionsの保存・logout・停止競合と試行counterの競合を実PostgreSQL / HTTPで検証しました。旧payloadの再投入もauth_versionで拒否します。依頼・コメントのFK・業務競合・seedは [横断検証計画](design-review.md)の未実施項目です。認証の成功をFR / AC全体やAWS経路の合格にしません。
+users・認証に続き、今回service_requestsの保存制約・FK、登録/閲覧、登録対停止・session保存失敗時のrollbackを実PostgreSQL / HTTPで検証します。担当/状態変更・コメントの並行処理・seedは [横断検証計画](design-review.md)の未実施項目です。今回の成功をFR / AC全体やAWS経路の合格にしません。

@@ -6,10 +6,10 @@ use Illuminate\Http\Request;
 
 final class AuthInput
 {
-    public static function check(Request $request, array $allowed = [])
+    public static function check(Request $request, array $allowed = [], array $queryAllowed = [])
     {
         $protected = ['id', 'requester_id', 'author_id', 'service_request_id', 'assignee_id', 'assignee_role', 'status', 'role', 'is_active', 'auth_version', 'password', 'created_at', 'updated_at', 'version'];
-        $extra = array_merge(array_diff(array_keys($request->json()->all()), $allowed), array_keys($request->query()));
+        $extra = array_merge(array_diff(array_keys($request->json()->all()), $allowed), array_diff(array_keys($request->query()), $queryAllowed));
         if (array_intersect($extra, $protected)) {
             return ApiError::response(403, 'forbidden');
         }
