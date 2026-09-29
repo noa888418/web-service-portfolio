@@ -2,9 +2,9 @@
 
 ## 状態・参照
 
-**2026-09-28の追加採用**：users・認証管理表・service_requests・担当/状態に続き、commentsの追加migrationとFR-05のコメント閲覧・FR-08の投稿・AC-14の投稿対完了を実装しました。既存migrationは変更していません。demo_seed_runs・公開用Web DB roleは未実装です。[コメント実装](comments.md)、[担当/状態](request-workflow.md)、[依頼実装](requests.md)、[認証実装](authentication.md)を参照してください。
+**2026-09-29更新**：users・認証管理表・service_requests・commentsに続き、demo_seed_runsの追加migrationとFR-09のローカル投入を実装しました。既存4本のmigrationは変更していません。公開用Web DB role・AWS投入は未実装です。[初期投入](demo.md)、[コメント実装](comments.md)、[担当/状態](request-workflow.md)、[依頼実装](requests.md)、[認証実装](authentication.md)を参照してください。
 
-2026-09-22作成、09-28更新。[要件](requirements.md)のFR-01～FR-09を具体化する設計です。管理投入・公開運用等は引き続き提案です。デモ運用前提は [基本設計](architecture.md)、実行手順・採用版・検証記録は [開発環境](development.md)、[API](api.md)、[画面](screens.md)、[対応表](design-review.md)を参照してください。
+2026-09-22作成。[要件](requirements.md)のFR-01～FR-09を具体化する設計です。ローカル投入以外の公開運用等は引き続き提案です。デモ運用前提は [基本設計](architecture.md)、実行手順・採用版・検証記録は [開発環境](development.md)、[API](api.md)、[画面](screens.md)、[対応表](design-review.md)を参照してください。
 
 ### 今回の採用範囲とLaravel標準との差分
 
@@ -85,7 +85,7 @@ erDiagram
 | created_at | timestamptz(6) | 不可 | CURRENT_TIMESTAMP | サーバー生成 |
 | updated_at | timestamptz(6) | 不可 | CURRENT_TIMESTAMP | Laravel / 管理手順が更新。自動更新の DB トリガーは使わない |
 
-`UNIQUE(id, role)` も設け、担当者の複合 FK の参照先にします。メールは初期投入とログインで同じ処理（前後空白除去 → ASCII の小文字化 → メール形式検証）を行います。デモアカウントは ASCII の `example.test` ドメインに限定する案です。国際化メール・メール到達性確認は対象外。DB の UNIQUE は正規化済み値に対して効かせ、重複は seed 全体をロールバックします。アプリの事前重複確認だけに依存しません。
+`UNIQUE(id, role)` も設け、担当者の複合 FK の参照先にします。メールは初期投入とログインで同じ処理（前後空白除去 → ASCII の小文字化 → メール形式検証）を行います。ローカルデモアカウントは ASCII の `example.test` ドメインを採用しました。国際化メール・メール到達性確認は対象外。DB の UNIQUE は正規化済み値に対して効かせ、重複は seed 全体をロールバックします。アプリの事前重複確認だけに依存しません。
 
 パスワードは Laravel Hash の **Argon2idをusers実装で採用**しました。PHP8.4.25で128文字の日本語を切り詰めず照合できることを検証済みです。ローカルのmemory=65536 KiB / time=4 / threads=1は検証用設定で、Fargateでの性能・メモリ余裕は未検証です。初期資格情報は公開期間ごとに外部生成するランダム値（案：20文字以上）とし、公開時のコストは実機計測後に決めます。初期投入の再実行で再ハッシュ・上書きしません。remember meは提供せずremember_tokenは不要という認証案を維持します。
 
@@ -127,7 +127,7 @@ DB は「対応開始後の担当者あり」と「担当者の役割」を保�
 
 ## 管理テーブル
 
-09-27時点でsessions / cache / cache_locksは以下の型・FK・CHECK・indexどおり実装済みです。migrationsは冒頭のLaravel標準構造を維持し、demo_seed_runsだけ未実装です。sessions.payloadはLaravelによる暗号化JSONのbase64表現、IP / User-AgentはNULLとし、認証ロックにはcache_locksのleaseではなくPostgreSQLのtransaction advisory lockを使います。
+sessions / cache / cache_locksとdemo_seed_runsは以下の型・制約で実装済みです。migrationsは冒頭のLaravel標準構造を維持します。demo_seed_runsにはpublication_id / seed_versionの非空CHECKも追加しました。公開用roleによる権限分離は未実装です。sessions.payloadはLaravelによる暗号化JSONのbase64表現、IP / User-AgentはNULLとし、認証ロックにはcache_locksのleaseではなくPostgreSQLのtransaction advisory lockを使います。
 
 | テーブル | カラム（型 / NULL / 既定）・制約 | 用途・インデックス |
 | --- | --- | --- |
@@ -192,6 +192,8 @@ PostgreSQLのFOR SHAREにも対象表の少なくとも1列のUPDATE権限が必
 
 初期投入は社員 A・B、IT担当者 X・Y と 3 種別・4 状態を網羅する架空依頼 4 件以上・コメントを含みます。ハッシュと role / 所有者は安全な入力・固定 fixture から生成し、クライアント JSON を投入しません。APP_ENV=production / APP_DEBUG=false と demo 用途は別条件です。seed の補助列や制約を無効化して fixture を通しません。
 
+OPS-01～03は今回ローカル範囲で実装しました。`demo:seed --target=local --publication=local-v1 --seed-version=1 --allow`を専用Compose serviceから実行し、実DB識別・用途・許可を照合します。資格情報はGit外のread-onlyファイルから取得、再実行で上書きしません。排他順はdemo_seed_runs→users→service_requests→commentsのEXCLUSIVE table lockです。通常HTTPの初回起動前に実施し、記録なし非空DBをリセットしません。具体的な対象一覧・検証・Windows手順は [demo.md](demo.md)を参照してください。AWS account照合・管理role分離、OPS-04～07は引き続き未実装です。
+
 期間内再デプロイでは保持、次回公開は新規初期データ、snapshot は**取得後 7 日間・通常最新 1 世代**、アプリログ 7 日・アクセスログ 30 日を今回の前提とします。「7 日」は各 snapshot の取得完了時刻から計算し、コピー・復元で寿命を延ばしません。新 snapshot の復元検証中だけ旧世代と一時併存し、検証後に旧世代を削除。ただし旧世代も元の 7 日期限を超えず、検証が間に合わなければ作成者が復元未確認を記録して期限内に削除・再検証計画を立てます。バックアップ予算枠 20 GB-month は当面維持します。
 
 運用上の依頼削除は親削除とコメント CASCADE を同一 transaction で実施。コメントだけの機密誤投入なら管理 role による対象コメントの削除を別途記録します。利用者は原則停止して参照を保持し、物理削除が必要なら関連依頼・コメントを調査して子から削除（FK RESTRICT を解除しない）。公開終了後の通常データ廃棄は DB と snapshot の期限削除で行い、state / 復元鍵を一括削除しません。
@@ -202,4 +204,4 @@ PostgreSQLのFOR SHAREにも対象表の少なくとも1列のUPDATE権限が必
 
 2026-09-22 に [PostgreSQL 制約](https://www.postgresql.org/docs/current/ddl-constraints.html)、[行ロック](https://www.postgresql.org/docs/current/explicit-locking.html)、[分離レベル](https://www.postgresql.org/docs/current/transaction-iso.html)、[Laravel Session](https://laravel.com/docs/13.x/session)、[Cache](https://laravel.com/docs/13.x/cache)、[Hashing](https://laravel.com/docs/13.x/hashing)を参照しました。ローカル採用版はLaravel13 / PostgreSQL18です。冒頭で採用済みとした部分以外のコメント・投入・公開運用等は本サービスの提案です。認証のtimeoutの検証範囲は [認証記録](authentication.md)を参照してください。
 
-users・認証・依頼・担当/状態に続き、コメントの制約/認可/入力/ページング、完了との両順序・2投稿、session保存失敗・INSERT後例外のrollbackを実PostgreSQL / HTTPで検証しました。seed・画面・AWSは [横断検証計画](design-review.md)の未実施項目です。今回の成功をFR / AC全体やAWS経路の合格にしません。
+users・認証・依頼・担当/状態・コメントに続き、ローカルseedの条件・再実行・同時投入・rollbackを実PostgreSQLで検証しました。画面・AWSでの対象照合/投入は [横断検証計画](design-review.md)の未実施項目です。今回の成功をFR / AC全体やAWS経路の合格にしません。

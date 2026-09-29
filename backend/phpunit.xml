@@ -21,5 +21,8 @@
         <testsuite name="Comments">
             <directory>tests/Comments</directory>
         </testsuite>
+        <testsuite name="Demo">
+            <directory>tests/Demo</directory>
+        </testsuite>
     </testsuites>
 </phpunit>

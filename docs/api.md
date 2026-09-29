@@ -2,6 +2,8 @@
 
 ## 状態・共通契約
 
+FR-09のローカル初期投入はWeb APIを追加せず、OPS-02/03のArtisanコマンドで実装しました。既存12 APIは通常public/index.php経由でも検証済みです。[ローカルHTTPと初期投入](demo.md)を参照してください。React・Vite proxy・公開経路は未検証です。
+
 2026-09-27に認証API-01～04と依頼API-05～07、09-28に担当/状態API-08～10を実装しました。続く今回の工程でFR-05/08・AC-14のコメントを採用し、API-11/12も実装しています。認証はSanctum Cookie、PostgreSQL session、無操作30分・絶対8時間、正規化メール5回/IP30回（各60秒）を維持します。[コメント実装](comments.md)、[担当/状態](request-workflow.md)、[依頼API](requests.md)、[認証記録](authentication.md)、[開発手順](development.md)を参照してください。
 
 2026-09-22 作成、09-27認証部分を更新。[DB](database.md)がコード・型の定義元、[画面](screens.md)が呼出元、[横断対応表](design-review.md)がFR / ACの追跡先です。JWT、一般会員登録、編集・削除、役割変更APIは提供しません。FR-09はDB文書のOPS-02 / OPS-03へ対応付けます。

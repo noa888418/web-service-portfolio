@@ -33,6 +33,7 @@ terraform.rc
 *.p12
 *.pfx
 credentials.json
+/.local/
 
 # Repository-local tooling, Python cache, and redacted scan reports.
 /.tools/

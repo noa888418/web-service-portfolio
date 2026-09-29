@@ -13,7 +13,7 @@ return [
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
-            'search_path' => 'public',
+            'search_path' => env('DB_SCHEMA', 'public'),
             'sslmode' => 'disable', // Isolated local Docker only; AWS requires verify-full.
             'timezone' => 'UTC',
         ],

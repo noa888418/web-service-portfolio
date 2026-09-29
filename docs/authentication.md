@@ -2,6 +2,8 @@
 
 ## 採用範囲（2026-09-27）
 
+2026-09-29のローカルHTTP工程では、FR-09で投入した4人を使い、テストrouterを使わない通常public/index.phpでもCookie認証・CSRF・logout後401を検証しました。[demo.md](demo.md)を参照してください。APP_ENV=localのHTTPだけSecure=false、productionはSecure=true強制を維持します。初期投入がproductionで許可されることと、公開HTTPSの認証経路を検証したことは別です。
+
 コメント工程ではAPI-11/12にも同じ認証・CSRF・本人共有lockを適用しました。本人lock → 親lock → コメントINSERT → session保存/commitの整合性は [comments.md](comments.md)に記録します。
 
 後続工程でAPI-05～10へ同じ認証middlewareを適用しました。users共有lock・session保存と業務INSERTのcommit順、5xx時のrollback追加は [requests.md](requests.md)、担当/状態更新での追加users NOWAIT・親lock・停止競合は [request-workflow.md](request-workflow.md)に記録します。認証が先に本人をlockする順序は変更していません。以下の「今回」は認証工程当時の範囲です。83テスト・645アサーション・終了コード0は利用者のローカル再実行でも確認済みで、GitHub実行結果とは区別します。

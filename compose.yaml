@@ -13,7 +13,7 @@ x-app: &app
 services:
   app:
     <<: *app
-    environment:
+    environment: &dev-environment
       APP_ENV: local
       SESSION_SECURE_COOKIE: "false"
       APP_DEBUG: "false"
@@ -46,6 +46,35 @@ services:
     networks: [testing]
     depends_on:
       test-db: {condition: service_healthy}
+
+  seed:
+    <<: *app
+    profiles: [demo]
+    environment:
+      <<: *dev-environment
+      DEPLOYMENT_PURPOSE: demo
+    entrypoint: ["php", "artisan", "demo:seed"]
+    command: []
+    volumes:
+      - type: bind
+        source: ./.local/credentials.json
+        target: /run/local-demo/credentials.json
+        read_only: true
+        bind: {create_host_path: false}
+    networks: [development]
+    depends_on:
+      dev-db: {condition: service_healthy}
+
+  http:
+    <<: *app
+    profiles: [http]
+    environment: *dev-environment
+    # Development only; every request uses the normal entrypoint, never a test router.
+    command: ["php", "-d", "zend.exception_ignore_args=1", "-S", "0.0.0.0:8000", "-t", "public", "public/index.php"]
+    ports: ["127.0.0.1:8000:8000"]
+    networks: [development, local_http]
+    depends_on:
+      dev-db: {condition: service_healthy}
 
   composer:
     profiles: [tools]
@@ -97,6 +126,9 @@ volumes:
   dev_data:
 
 networks:
+  # Host publishing needs a non-internal bridge on the current Docker Desktop.
+  # Only http joins it; databases remain on their internal networks.
+  local_http: {}
   development:
     internal: true
   testing:

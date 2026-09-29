@@ -4,11 +4,11 @@
 
 React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsの使用は決定済みです。AWS月額予算は3,000円、構築から撤去まで月60時間程度、公開は事前案内期間のみ。独自ドメインは未所有です。
 
-秘密情報検査、Laravel・users・認証・依頼・担当/状態に続き、コメント閲覧/投稿と完了競合を実装しました。PHP / ComposerはDocker内で使用します。React・公開デモseed・Terraform・AWSは今回の対象外です。Pythonは検査・ローカル設定生成の補助用です。過去の検証記録は当時の結果を維持し、最新結果は末尾のコメント工程記録に分けます。
+秘密情報検査、Laravel・users・認証・依頼・担当/状態・コメントに続き、FR-09のローカル初期投入と通常HTTP起動を実装しました。PHP / ComposerはDocker内で使用します。React・AWSへの投入・Terraformは今回の対象外です。Pythonは検査・ローカル設定生成の補助用です。過去の検証記録は当時の結果を維持し、最新結果は末尾のFR-09工程記録に分けます。
 
 AWS のサブネット・SG・Cookie セッション・キャッシュ・OIDC・撤去は [基本設計案](architecture.md)、公式料金と構築・検証・撤去を含む 60 時間の試算は [費用見積もり](costs.md)を参照してください。調査済みの仕様と実機での検証済み事項を区別します。
 
-DB・API・4画面は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、対応は [design-review.md](design-review.md)です。認証の実装差分は [authentication.md](authentication.md)、今回のコメント採用範囲・並行処理は [comments.md](comments.md)に記録します。画面・初期投入・公開運用は次工程です。
+DB・API・4画面は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、対応は [design-review.md](design-review.md)です。認証の実装差分は [authentication.md](authentication.md)、コメント採用範囲・並行処理は [comments.md](comments.md)、今回のWindowsでの準備・migration・投入・資格情報の確認・HTTP起動・保持した停止は [demo.md](demo.md)に記録します。画面・公開運用は次工程です。
 
 運用前提は架空データ専用、構築・検証6時間/公開48時間/閉鎖・保存・撤去等6時間（初月は検証に応じ公開短縮）。同期間は保持、次回公開は新DBへの初期投入。snapshot取得後7日・通常最新1世代、アプリログ7日・アクセスログ30日。作成者が公開終了時の資格情報・セッション失効と削除結果確認を担当します。誤投入は期限を待たず対応し、詳細はDB文書のOPS-01～OPS-07に従います。
 
@@ -384,3 +384,28 @@ downに `-v` は付けません。テストは専用test-dbと実行ごとのラ
 CIにComments suiteを追加し、全体再実行・contents:read・既存check名Users PostgreSQL・Gitleaksを維持しました。対象コミット・実行URL・結果を確認できていないためGitHub成功とは記録しません。必須チェック設定はworkflow追加とは別です。commit・pushは実施していません。
 
 未実装/未検証：ReactでのXSS非実行・操作性/二重送信/結果不明の案内、FR-09公開デモseed、Terraform・AWS、実HTTPS/CloudFront、公開DB権限分離・負荷・worker終了/通信断のtimeout。本文をJSON文字列として往復できる検証を、ブラウザーや公開経路全体の安全性保証に広げません。
+
+## FR-09・ローカルHTTP工程の最新記録（2026-09-29）
+
+利用者から前工程236テスト・3,488アサーション・終了コード0のWindows再実行成功を受領しました。今回開始時のHEADは`49fa8f5f3e3f1703e01f1ed98ecc1fadb31e97c4`、未コミット差分なしでした。今回の変更は未commitで、GitHubの対象SHA・実行URL・結果は確認していません。既存workflowにDemo suiteと資格情報生成テストを追加しましたが、workflow追加とCI成功・必須チェック設定は別です。
+
+手順と設計理由は [demo.md](demo.md)に集約しました。基盤（Composeのseed/http・資格情報生成）、FR-09（追加migration・ガード・手動command）、テスト/CI、文書を別のレビュー単位として確認できます。採用版とlockは変更していません。Laravel13.32.0 / PHP8.4.25 / Composer2.10.3 / PostgreSQL18.6 / PHPUnit13.3.4 / Sanctum4.3.3、Gitleaks8.30.1を維持しています。
+
+| 検証 | 結果・証跡の範囲 |
+| --- | --- |
+| Demo単独 | **34テスト・367アサーション・終了コード0**。投入条件・no-op・rollback・同期付き別process投入・通常public/index.phpの12 API |
+| 全体回帰 | **270テスト・3,855アサーション・終了コード0**。既存236 / 3,488を維持しDemo 34 / 367を追加 |
+| 資格情報生成 | `python scripts/test_demo_setup.py` 1テスト成功。ランダム4件・既存ファイル非上書き。実ファイルのGit除外を確認 |
+| 接続先ガード | `DB_HOST=dev-db`をテスト起動へ指定するとbootstrapで拒否、期待どおり終了コード1。開発DBへの接続・初期化なし |
+| 再実行の保全 | Demo再実行も34 / 367成功。test-dbのpublicに置いた今回専用の確認行29を保持、ランダムtest schema残存0。確認用tableだけ撤去。開発DBも4/4/4/1を保持 |
+| 開発DB | 事前にmigrations/usersだけ、users 0件を確認。通常migrationで残り4本を追加、明示seedでcreated、再実行no-op。4利用者・4依頼・4コメント・成功記録1件 |
+| Windows→通常HTTP | Cookie保持クライアントで4人のlogin/me/一覧/詳細/コメント/logout/401成功。停止・再起動後も成功、業務件数4/4/4/1を保持 |
+| コンテナ | http UID10001、127.0.0.1:8000 publish、DB port非公開。http内に資格情報ファイルなし。既存の非root・multi-stageイメージを利用 |
+| 秘密情報制御 | `python -I scripts/test_secret_controls.py`成功。隔離repoで検出時commit拒否・redaction・既存hook共存・検査器欠落時失敗、本repoのHEAD/index不変 |
+| 最終静的検査 | 文書ローカルリンク、`git diff --check` / `--cached --check`成功。Gitleaks files / staged成功（stagedは0件）。追跡済みignore対象なし |
+
+途中の失敗も区別します。DBの実IP照合は`inet_server_addr()::text`が`/32`付きになるため正しい接続も拒否していました。`host(inet_server_addr())`でアドレスを取得し、照合を維持して修正しました。Python生成器のstdlib名が既存scripts/secrets.pyと衝突したため、標準os.urandomとbase64へ変更しました。いずれも修正後のテストが上記結果です。
+
+実ローカル投入では、制限ユーザーが作ったファイルのACLでDocker Desktopがmountを拒否しました。確認済みの通常ユーザーSIDへ権限を与え、値を変えず再実行して成功しました。HTTPをinternal networkだけに置いた初回はportが割り当てられず、http専用bridge追加後に疎通しました。その直後のWindows疎通1回はITの読み取り段階で失敗しましたが、当時は詳細分類がなく原因は特定できていません。以後は失敗箇所・例外型だけを表示するようにし、手動再実行と停止/再起動後の再実行はともに成功しました。自動再送や基準緩和は追加していません。
+
+ローカルHTTPは開発専用です。公開APP_ENV=productionのSecure Cookieを弱めていません。Docker Engine 27.5.1のlocalhost公開に関する既知のL2制約は [demo.md](demo.md)に記録し、外部端末からの隔離を保証済みとはしません。React/Vite proxy実機、AWS対象照合・権限・公開投入・資格情報配布、実HTTPS、GitHub CI実行・必須チェック設定は未検証です。

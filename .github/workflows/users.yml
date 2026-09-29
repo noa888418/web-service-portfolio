@@ -19,6 +19,8 @@ jobs:
           persist-credentials: false
       - name: Generate temporary local credentials without logging values
         run: python3 scripts/setup_local.py
+      - name: Verify private credential generation without printing values
+        run: python3 scripts/test_demo_setup.py
       - name: Build pinned PHP runtime and Composer tooling
         run: docker compose --profile tools build app composer
       - name: Audit locked PHP dependencies
@@ -35,7 +37,9 @@ jobs:
         run: docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Workflow
       - name: Test comments and completion concurrency
         run: docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Comments
-      - name: Repeat all suites after comments verification
+      - name: Test guarded demo seed and normal HTTP entrypoint
+        run: docker compose --profile test run --rm test php vendor/bin/phpunit --testsuite Demo
+      - name: Repeat all suites after demo verification
         run: docker compose --profile test run --rm test
       - name: Stop containers
         if: always()
