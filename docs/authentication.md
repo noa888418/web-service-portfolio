@@ -2,6 +2,8 @@
 
 ## 採用範囲（2026-09-27）
 
+続くReact工程では、CSRF取得→login→me→一覧→logoutをViteの相対URL proxyと実Chromiumで確認しました。認証middleware・CSRF・試行制限・transactionは変更していません。画面でのデータ破棄・世代照合・通信失敗時の非再送は [frontend.md](frontend.md)に記録します。開発proxyのIP枠を共有し、未信頼の転送headerは引き続き採用しません。
+
 2026-09-29のローカルHTTP工程では、FR-09で投入した4人を使い、テストrouterを使わない通常public/index.phpでもCookie認証・CSRF・logout後401を検証しました。[demo.md](demo.md)を参照してください。APP_ENV=localのHTTPだけSecure=false、productionはSecure=true強制を維持します。初期投入がproductionで許可されることと、公開HTTPSの認証経路を検証したことは別です。
 
 コメント工程ではAPI-11/12にも同じ認証・CSRF・本人共有lockを適用しました。本人lock → 親lock → コメントINSERT → session保存/commitの整合性は [comments.md](comments.md)に記録します。

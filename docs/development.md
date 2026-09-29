@@ -2,13 +2,15 @@
 
 ## プロジェクトの決定事項と現在の範囲
 
+最新工程は**Reactログイン・一覧・ログアウト**です。[frontend.md](frontend.md)に採用版と、失敗時停止付きPowerShellの起動/検証/停止手順を記録しました。ブラウザーは127.0.0.1:5173へ統一します。以下の従来工程の記録は当時の範囲を残し、今回の結果は末尾に追記します。
+
 React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsの使用は決定済みです。AWS月額予算は3,000円、構築から撤去まで月60時間程度、公開は事前案内期間のみ。独自ドメインは未所有です。
 
 秘密情報検査、Laravel・users・認証・依頼・担当/状態・コメントに続き、FR-09のローカル初期投入と通常HTTP起動を実装しました。PHP / ComposerはDocker内で使用します。React・AWSへの投入・Terraformは今回の対象外です。Pythonは検査・ローカル設定生成の補助用です。過去の検証記録は当時の結果を維持し、最新結果は末尾のFR-09工程記録に分けます。
 
 AWS のサブネット・SG・Cookie セッション・キャッシュ・OIDC・撤去は [基本設計案](architecture.md)、公式料金と構築・検証・撤去を含む 60 時間の試算は [費用見積もり](costs.md)を参照してください。調査済みの仕様と実機での検証済み事項を区別します。
 
-DB・API・4画面は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、対応は [design-review.md](design-review.md)です。認証の実装差分は [authentication.md](authentication.md)、コメント採用範囲・並行処理は [comments.md](comments.md)、今回のWindowsでの準備・migration・投入・資格情報の確認・HTTP起動・保持した停止は [demo.md](demo.md)に記録します。画面・公開運用は次工程です。
+DB・API・4画面は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、対応は [design-review.md](design-review.md)です。認証の実装差分は [authentication.md](authentication.md)、コメント採用範囲・並行処理は [comments.md](comments.md)、過去の初回準備は [demo.md](demo.md)、ログイン/一覧の起動・操作・停止は [frontend.md](frontend.md)に記録します。登録/詳細画面・公開運用は次工程です。
 
 運用前提は架空データ専用、構築・検証6時間/公開48時間/閉鎖・保存・撤去等6時間（初月は検証に応じ公開短縮）。同期間は保持、次回公開は新DBへの初期投入。snapshot取得後7日・通常最新1世代、アプリログ7日・アクセスログ30日。作成者が公開終了時の資格情報・セッション失効と削除結果確認を担当します。誤投入は期限を待たず対応し、詳細はDB文書のOPS-01～OPS-07に従います。
 
@@ -409,3 +411,21 @@ CIにComments suiteを追加し、全体再実行・contents:read・既存check�
 実ローカル投入では、制限ユーザーが作ったファイルのACLでDocker Desktopがmountを拒否しました。確認済みの通常ユーザーSIDへ権限を与え、値を変えず再実行して成功しました。HTTPをinternal networkだけに置いた初回はportが割り当てられず、http専用bridge追加後に疎通しました。その直後のWindows疎通1回はITの読み取り段階で失敗しましたが、当時は詳細分類がなく原因は特定できていません。以後は失敗箇所・例外型だけを表示するようにし、手動再実行と停止/再起動後の再実行はともに成功しました。自動再送や基準緩和は追加していません。
 
 ローカルHTTPは開発専用です。公開APP_ENV=productionのSecure Cookieを弱めていません。Docker Engine 27.5.1のlocalhost公開に関する既知のL2制約は [demo.md](demo.md)に記録し、外部端末からの隔離を保証済みとはしません。React/Vite proxy実機、AWS対象照合・権限・公開投入・資格情報配布、実HTTPS、GitHub CI実行・必須チェック設定は未検証です。
+
+## Reactログイン・一覧工程（2026-09-29）
+
+開始HEADは`f98fef9957f9bd07ab7c3ad5fa3614424f485077`、差分なしでした。frontend/、Node24.21.0の非root/multi-stage Docker、5173同一オリジンproxy、PowerShell起動/検証script、独立したブラウザー検証用Compose、CI workflowを追加しました。既存PHP/Gitleaks workflow・migration・接続先ガードは変更していません。詳細は [frontend.md](frontend.md)です。
+
+| 検証 | 結果 |
+| --- | --- |
+| 型・lint・build・npm audit | 全て終了コード0、依存監査0件。採用版とpeer条件はfrontend文書 |
+| Vitest/jsdomのモック検証 | 33テスト成功。認証状態、古い応答破棄、二重送信、401/419/422/429/通信失敗、ページング、label/focus |
+| 隔離実ブラウザー | Chromium + 通常public/index.php + PostgreSQL。A/B/X/Y、URL直接アクセス/再読込、20/21件、タイトルのXSS非実行、390px幅で成功 |
+| Windows再実行手順 | scripts/test_frontend.ps1を実行し全検査と隔離実ブラウザー再検証、後片付けまで終了コード0 |
+| 既存デモ実ブラウザー | 同じ4人のログイン/一覧/ログアウト成功。前後で業務3表・投入記録の内容を非表示比較して一致。4/4/4/1件を保持 |
+| PHP回帰 | 270テスト・3,855アサーション・終了コード0 |
+| 誤接続拒否 | DB_HOST=dev-dbをテストへ渡すと接続前に終了コード1、期待どおり拒否 |
+| 秘密情報制御 | 隔離repo検査成功。検出時commit拒否・値redaction・既存hook共存・scanner欠落時失敗、HEAD/index不変 |
+| 最終確認 | 文書のローカルリンク、新規ファイルの末尾空白、git diff --check / --cached --check、Gitleaks files / staged成功（stagedは0件） |
+
+ビルド出力先の非root権限と、隔離ComposeのDB起動依存を修正して再検証しました。過去のIT読み取り1回失敗は原因未特定のままで、今回の成功によって解消済みとはしません。再発時の安全なログ/状態確認はfrontend文書に記録しています。画面全体のアクセシビリティ、全ブラウザー、登録/詳細、AWS、今回GitHub CI実行・必須チェックは未検証です。commit/pushは実施していません。

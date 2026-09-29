@@ -1,0 +1,59 @@
+# A separate project: no development DB, volume or credentials mounts.
+name: it-requests-browser-tests
+services:
+  test-db:
+    extends: {file: compose.yaml, service: test-db}
+    profiles: [e2e]
+  e2e-api:
+    extends: {file: compose.yaml, service: test}
+    profiles: [e2e]
+    command: ["php", "-d", "zend.exception_ignore_args=1", "tests/browser-server.php"]
+    depends_on:
+      test-db: {condition: service_healthy}
+    volumes:
+      - browser_credentials:/run/browser
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 8000) ? 0 : 1);"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  frontend:
+    profiles: [e2e]
+    image: it-requests-frontend:local
+    build: {context: ./frontend, target: local}
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      VITE_CONTAINER: "1"
+      API_PROXY_TARGET: http://e2e-api:8000
+    networks: [testing]
+    depends_on:
+      e2e-api: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  browser:
+    profiles: [e2e]
+    image: it-requests-browser:local
+    build: {context: ./frontend, dockerfile: Dockerfile.browser}
+    user: "10001:10001"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    network_mode: service:frontend
+    shm_size: 512mb
+    volumes:
+      - browser_credentials:/run/browser
+    depends_on:
+      frontend: {condition: service_healthy}
+volumes:
+  browser_credentials:
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=1m,uid=10001,gid=10001,mode=0700"
+networks:
+  testing:
+    internal: true

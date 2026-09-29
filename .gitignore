@@ -47,3 +47,9 @@ gitleaks-report.*
 /backend/storage/**
 !/backend/storage/.gitignore
 /backend/.phpunit.cache/
+
+# Frontend dependencies, generated output and private browser artifacts.
+/frontend/node_modules/
+/frontend/dist/
+/frontend/test-results/
+/frontend/playwright-report/

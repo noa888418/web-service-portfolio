@@ -80,9 +80,9 @@ PHP開発用サーバーをUID10001で実行し、ホスト公開は127.0.0.1:80
 
 停止は上記`stop`でデータを保持します。`down`でもnamed volumeは保持されますが、他profileの稼働serviceも停止し得ます。通常利用ではstop対象を明記し、`-v`は付けません。ソース変更後は再buildし、httpを再作成します。migrationの再適用・同じseed再実行でリセットしません。
 
-## 次工程のVite接続案（未実装）
+## Vite接続（ログイン・一覧工程で実装）
 
-Viteを127.0.0.1:5173にbindし、`/api`、`/sanctum`、`/login`、`/logout`を`http://127.0.0.1:8000`へproxyします。ブラウザーはVite側の相対URLを使い、Cookie送信とXSRF-TOKENからのX-XSRF-TOKEN設定を行います。ホスト名をlocalhostと127.0.0.1で混ぜません。ブラウザーから別portのAPIへ直接fetchするCORS方式にはしません。[Vite公式server.proxy](https://vite.dev/config/server-options.html#server-proxy)
+ブラウザーは127.0.0.1:5173へ統一します。Docker内のViteから`http://http:8000`へproxyし、GET /loginはReact、POST /loginはLaravelです。相対URL・Cookie・X-XSRF-TOKENを使い、ホスト名をlocalhostと127.0.0.1で混ぜません。ブラウザーから別portへ直接fetchするCORS方式は追加していません。[今回の起動・検証手順](frontend.md)では既存DB・資格情報を使い、seedやmigrationを再実行しません。[Vite公式server.proxy](https://vite.dev/config/server-options.html#server-proxy)
 
 ## 検証・未検証の境界
 
@@ -107,4 +107,4 @@ python scripts/secrets.py staged
 
 テスト用資格情報は専用schemaと一時ファイルに生成し、Windowsのローカル用ファイルとも公開配布用資格情報とも分離します。CIはDemo suiteと全suiteを追加済みで、既存Gitleaks・必須失敗判定を維持します。対象コミット・実行URL・結果を確認していないためGitHub成功とは記載しません。必須チェック設定も未確認です。
 
-AWS対象照合・管理/公開DB role分離、公開投入・資格情報配布/失効、実HTTPS・CloudFront、ブラウザー画面とXSS非実行、Vite proxy実機、外部端末からのネットワーク隔離は未検証です。
+AWS対象照合・管理/公開DB role分離、公開投入・資格情報配布/失効、実HTTPS・CloudFront、登録/詳細画面、外部端末からのネットワーク隔離は未検証です。ログイン/一覧画面・一覧タイトルのXSS非実行・Vite proxyは後続の [frontend.md](frontend.md)で検証しました。

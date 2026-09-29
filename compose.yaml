@@ -11,6 +11,26 @@ x-app: &app
   security_opt: [no-new-privileges:true]
 
 services:
+  frontend:
+    profiles: [frontend]
+    image: it-requests-frontend:local
+    build: {context: ./frontend, target: local}
+    user: "1000:1000"
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      VITE_CONTAINER: "1"
+      API_PROXY_TARGET: http://http:8000
+    ports: ["127.0.0.1:5173:5173"]
+    volumes:
+      - ./frontend/src:/app/src:ro
+    networks: [local_http]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5173/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   app:
     <<: *app
     environment: &dev-environment

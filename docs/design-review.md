@@ -1,6 +1,6 @@
 # DB・API・画面の横断設計レビュー
 
-2026-09-22作成、09-29更新。認証・依頼・担当/状態・コメントに続き、FR-09のローカル投入と通常HTTPを実装しました。[初期投入の実装・テスト対応](demo.md)、[コメント](comments.md)、[担当/状態](request-workflow.md)、[依頼API](requests.md)を参照してください。画面・AWSでの公開投入は未実装です。[要件](requirements.md)、[DB](database.md)、[API](api.md)、[画面](screens.md)、[セキュリティ](security.md)、[認証実装](authentication.md)と合わせて参照します。
+2026-09-22作成、09-29更新。API・ローカル初期投入に続き、SCR-01ログイン・SCR-02依頼一覧とログアウトを実装しました。[画面の実装・テスト対応](frontend.md)、[初期投入](demo.md)、[コメント](comments.md)、[担当/状態](request-workflow.md)、[依頼API](requests.md)を参照してください。登録/詳細画面・AWSでの公開投入は未実装です。[要件](requirements.md)、[DB](database.md)、[API](api.md)、[画面](screens.md)、[セキュリティ](security.md)、[認証実装](authentication.md)と合わせて参照します。
 
 ## FR → 画面 → API / 管理手順 → テーブル
 
@@ -78,7 +78,7 @@ ID 例は A=1、B=2、X=3、Y=4。以下は実行結果ではなく、設計に�
 
 ## 検証の境界と予定
 
-下表の既存検証に、今回のローカル初期投入AC-16・17と通常HTTPを追加しました。[初期投入の対応](demo.md)を参照してください。画面のAC-13、AWSのAC-19、AWSでの対象照合・投入は引き続き未検証です。
+下表にSCR-01/02のモック・実ブラウザー検証を追加しました。[画面の対応](frontend.md)を参照してください。AC-13は一覧タイトルのXSS非実行だけ確認済みで、詳細/コメント画面・AWSのAC-19・AWSでの対象照合/投入は引き続き未検証です。
 
 | 区分 | 検証内容 | 今回の状態 |
 | --- | --- | --- |
@@ -88,10 +88,11 @@ ID 例は A=1、B=2、X=3、Y=4。以下は実行結果ではなく、設計に�
 | 依頼登録/一覧/詳細 / 実PostgreSQL・HTTP | API-05～07、保存制約・認可・入力・ページング・CSRF・失効・失敗rollback・停止とのcommit順 | Requests 72テスト・1,011アサーション。全体155 / 1,656、再実行成功。[対応と境界](requests.md) |
 | 担当/状態更新 / 実PostgreSQL・HTTP | API-08～10、Policy・候補・16遷移・版競合、停止競合、session失敗/UPDATE後例外のrollback | Workflow suite。別IT・別Cookie・2 HTTP workerと同期点を使用。[最新の件数・結果](development.md) |
 | コメント / 実PostgreSQL・HTTP | API-11/12、FK/NOT NULL/CHECK、親削除CASCADE/投稿者RESTRICT、認可・本文・ページング、投稿対完了の両順序・2投稿、保存失敗rollback | Comments 43テスト・769アサーション成功。全体236 / 3,488。別利用者/別Cookie/2 HTTP worker・同期点を使用。[詳細](comments.md) |
-| Laravel / React（残り） | 二重操作、画面遷移・keyboard / focus / XSS、通信結果不明の表示 | 未実施、画面実装後 |
+| Reactログイン/一覧 | FR-01/02/04→SCR-01/02→API-01～05→users・sessions・cache・service_requests。通信世代・非再送・状態消去、エラー、ページング、label/focus、XSS文字列 | モック33テスト、実Chromium/実PGのA/B/X/Y・20/21件・XSS非実行成功。[詳細](frontend.md) |
+| Laravel / React（残り） | 登録/詳細・担当/状態/コメントの画面、全アクセシビリティ | 未実施、次工程 |
 | FR-09 / 実PostgreSQL・通常HTTP | 用途/実接続/許可、空DBと記録、no-op、途中失敗rollback、別processの同期付き同時投入、初期資格情報でAPI-01～12 | Demo 34テスト・367アサーション成功。全体270 / 3,855。Windows開発DBの投入・保持した再起動も確認。[詳細](demo.md) |
 | 実PostgreSQL（残り） | 同時INSERTのメール競合、公開DB権限分離 | 未実施。ローカルseedの成功をAWSの対象照合・管理権限の保証に広げない |
-| ローカル結合（残り） | Reactとの統合、通信切断で結果不明時の非再送、実HTTPS | 未実施。現在はcURLのCookieクライアントと実HTTPサーバーによる認証フローを検証 |
+| ローカル結合（残り） | 実ネットワーク切断での結果不明、実HTTPS、全ブラウザー | 未実施。Reactログイン/一覧と実Cookie/HTTPは検証済み、通信失敗はモックで区別 |
 | AWS 実機 | CloudFront標準TLSとorigin経路、Cookie/Header転送、A/Bのcache混在なし、SG直アクセス拒否、proxy/IP/HTTPS判定、RDS TLS、OIDC、秘密注入、snapshot復元と7日削除、閉鎖・失効・課金対象撤去、メモリ/ハッシュ負荷 | 未実施。ローカルDBテストでは代替できない |
 
 AC-19 は Laravel の no-store 単体確認だけで合格にしません。Actions の初回 push は利用者確認済みですが、PR・CI検出時の失敗・必須チェックは引き続き未確認です。今回の設計追加を既存CIが検証したとは記載しません。

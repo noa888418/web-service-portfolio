@@ -1,0 +1,11 @@
+FROM node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS node
+FROM mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+WORKDIR /app
+RUN chown 10001:10001 /app
+ENV HOME=/tmp
+USER 10001:10001
+COPY --chown=10001:10001 package.json package-lock.json .npmrc ./
+RUN npm ci --no-fund
+COPY --chown=10001:10001 e2e ./e2e
+CMD ["node", "e2e/run.mjs"]
