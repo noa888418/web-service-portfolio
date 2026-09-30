@@ -78,3 +78,9 @@ footer { border-top: 1px solid #dce4e8; color: #657e88; padding: 1.3rem; text-al
   .title-cell { min-width: 0; max-width: none; }
   .status { justify-self: start; }
 }
+.comments { margin-top: 2rem; border-top: 1px solid #d8e1e7; padding-top: 1rem; }
+.comments .pagination { flex-wrap: wrap; }
+.comment-list { list-style: none; padding: 0; }
+.comment-list li { border-bottom: 1px solid #d8e1e7; padding: 1rem 0; }
+.comment-heading { display: flex; flex-wrap: wrap; gap: .5rem 1rem; font-size: .9rem; }
+.comment-body { white-space: pre-wrap; overflow-wrap: anywhere; }

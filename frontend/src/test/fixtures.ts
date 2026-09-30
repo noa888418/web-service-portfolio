@@ -10,8 +10,11 @@ export function listing(title = '端末の相談', page = 1, total = 21): Listin
     meta: { current_page: page, per_page: 20, total, last_page: Math.max(1, Math.ceil(total / 20)) } }
 }
 export function mockedApi() {
+  const comments = { data: [], meta: { current_page: 1, per_page: 20, total: 0, last_page: 1 } }
   return { csrf: vi.fn<Api['csrf']>().mockResolvedValue(), login: vi.fn<Api['login']>().mockResolvedValue(),
     me: vi.fn<Api['me']>().mockRejectedValue(new ApiError(401)), logout: vi.fn<Api['logout']>().mockResolvedValue(),
+    comments: vi.fn<Api['comments']>().mockResolvedValue(comments),
+    comment: vi.fn<Api['comment']>().mockResolvedValue({ data: { id: '1', body: '追加情報', author: a, created_at: '2026-09-30T00:00:00.000000Z' } }),
     requests: vi.fn<Api['requests']>().mockResolvedValue(listing()),
     detail: vi.fn<Api['detail']>().mockResolvedValue({ data: detail() }),
     create: vi.fn<Api['create']>().mockResolvedValue({ data: detail() }),

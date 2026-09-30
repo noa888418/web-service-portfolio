@@ -1,5 +1,16 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { api, ApiError } from './api'
+it('comments use body only, Cookie/CSRF, exact 201 and endpoint-specific safe validation', async () => {
+  const fetch = vi.fn().mockResolvedValueOnce(new Response('{"data":{}}', { status: 201, headers: { 'Content-Type': 'application/json' } }))
+    .mockResolvedValueOnce(new Response('{"error":{"fields":{"body":["private"]}}}', { status: 422, headers: { 'Content-Type': 'application/json' } }))
+    .mockResolvedValueOnce(new Response('{"data":{}}', { status: 200, headers: { 'Content-Type': 'application/json' } }))
+  vi.stubGlobal('fetch', fetch); document.cookie = 'XSRF-TOKEN=fixture%3D; path=/'
+  await api.comment('1', '文字\n列')
+  expect(fetch).toHaveBeenCalledWith('/api/requests/1/comments', expect.objectContaining({ method: 'POST', credentials: 'same-origin', cache: 'no-store', body: JSON.stringify({ body: '文字\n列' }), headers: expect.objectContaining({ 'X-XSRF-TOKEN': 'fixture=' }) }))
+  await expect(api.comment('1', '')).rejects.toMatchObject({ status: 422, fields: { body: ['コメントは1～2000文字で入力してください。'] } })
+  await expect(api.comment('1', '文字')).rejects.toMatchObject({ status: 0 })
+  expect(fetch).toHaveBeenCalledTimes(3)
+})
 it('PATCH uses Cookie/CSRF, exact expected_version and a safe error code allowlist', async () => {
   const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ data: { id: '1', version: 42 } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'no_change', message: 'private upstream' } }), { status: 409, headers: { 'Content-Type': 'application/json' } }))

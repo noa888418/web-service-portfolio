@@ -4,6 +4,7 @@ import type { Fields, RequestSummary } from './api'
 import type { Session, ViewState } from './session'
 import { normalizeText } from './request-input'
 import { WorkflowControls } from './WorkflowControls'
+import { CommentFeedback, CommentsView } from './Comments'
 
 const roles = { employee: '社員', it_staff: 'IT担当者' }
 const categories = { inquiry: '問い合わせ', bug: '不具合', improvement: '改善要望' }
@@ -110,6 +111,7 @@ function RequestDetailView({ state, session }: { state: ViewState; session: Sess
     <div className="page-heading"><div><span className="eyebrow">REQUEST DETAIL</span><h1 id="page-title" tabIndex={-1}>依頼詳細</h1></div><button disabled={state.loadingList || state.busy} onClick={() => void session.loadDetail()}>再読込</button></div>
     <Alert message={state.notice} />
     <Alert message={state.workflowNotice} />
+    <CommentFeedback state={state} session={session} />
     {state.workflowResult && <p className="result" role="status" tabIndex={-1} ref={result}>{state.workflowResult}</p>}
     {state.loadingList && <p role="status">詳細を読み込んでいます…</p>}
     {row && <>
@@ -126,7 +128,7 @@ function RequestDetailView({ state, session }: { state: ViewState; session: Sess
       <h2>内容</h2><p className="request-body">{row.body}</p>
       {row.status === 'completed' && <p role="status">完了した依頼です。</p>}
       <WorkflowControls state={state} session={session} />
-      <p className="subtle">コメント表示・投稿は今後追加します。</p>
+      <CommentsView state={state} session={session} />
     </>}
     <RouteLink session={session} to="/requests">一覧へ戻る</RouteLink>
   </section>
@@ -147,7 +149,7 @@ export function App({ session }: { session: Session }) {
       else void session.resume()
     }
     const unload = (event: BeforeUnloadEvent) => {
-      if (session.dirty() || session.snapshot().submission === 'sending') { event.preventDefault(); event.returnValue = '' }
+      if (session.dirty() || session.snapshot().submission === 'sending' || session.snapshot().commentOutcome === 'sending') { event.preventDefault(); event.returnValue = '' }
     }
     const pageshow = (event: PageTransitionEvent) => { if (event.persisted) void session.open() }
     window.addEventListener('popstate', pop)
@@ -176,7 +178,7 @@ export function App({ session }: { session: Session }) {
       <aside className="demo-notice"><strong>架空データ専用</strong><span>実在の個人情報、パスワード、APIキー、社内の機密情報を入力しないでください。<br />ローカル検証用・外部公開していません。</span></aside>
       {state.phase === 'guest' && <Login session={session} state={state} />}
       {state.phase === 'checking' && <p className="empty" role="status" aria-busy="true">認証状態を確認しています…</p>}
-      {state.phase === 'uncertain' && <section className="empty"><h1 ref={heading} tabIndex={-1}>認証状態の確認</h1><Alert message={state.notice} /><button disabled={state.busy} onClick={() => void session.check()}>認証状態を再確認</button></section>}
+      {state.phase === 'uncertain' && <section className="empty"><h1 ref={heading} tabIndex={-1}>認証状態の確認</h1><Alert message={state.notice} /><button disabled={state.busy} onClick={() => void session.resume()}>認証状態を再確認</button></section>}
       {state.phase === 'notFound' && <section className="empty"><h1>ページが見つかりません</h1><p>{state.notice}</p><a href="/requests">依頼一覧へ</a></section>}
       {state.phase === 'authenticated' && state.route === 'new' && <NewRequest state={state} session={session} />}
       {state.phase === 'authenticated' && state.route === 'detail' && <RequestDetailView state={state} session={session} />}

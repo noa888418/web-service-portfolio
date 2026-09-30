@@ -5,6 +5,12 @@ export function normalizeText(value: string): string {
   return value.replace(/\r\n?/g, '\n').replace(/^[\p{Z}\t\n\v\f\r\u0085]+|[\p{Z}\t\n\v\f\r\u0085]+$/gu, '')
 }
 export const blankDraft = (): RequestInput => ({ title: '', category: 'inquiry', body: '' })
+export function validateComment(input: string) {
+  const body = normalizeText(input)
+  const length = Array.from(body).length
+  return { body, error: length < 1 || length > 2000 || body.includes('\0') || /[\uD800-\uDFFF]/u.test(body)
+    ? 'コメントは1～2000文字で入力してください。' : '' }
+}
 export function validateRequest(input: RequestInput): { value: RequestInput; fields: Fields } {
   const value = { ...input, title: normalizeText(input.title), body: normalizeText(input.body) }
   const fields: Fields = {}

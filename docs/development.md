@@ -2,7 +2,7 @@
 
 ## プロジェクトの決定事項と現在の範囲
 
-最新工程は**React詳細の担当・状態変更**です。[frontend.md](frontend.md)に採用版と、失敗時停止付きPowerShellの起動/検証/停止手順を記録しました。ブラウザーは127.0.0.1:5173へ統一します。以下の従来工程の記録は当時の範囲を残し、今回の結果は末尾に追記します。
+最新工程は**React詳細のコメント一覧・投稿**です。[frontend.md](frontend.md)に採用版と、失敗時停止付きPowerShellの起動/検証/停止手順を記録しました。ブラウザーは127.0.0.1:5173へ統一します。以下の従来工程の記録は当時の範囲を残し、今回の結果は末尾に追記します。
 
 React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsの使用は決定済みです。AWS月額予算は3,000円、構築から撤去まで月60時間程度、公開は事前案内期間のみ。独自ドメインは未所有です。
 
@@ -10,7 +10,7 @@ React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、Gi
 
 AWS のサブネット・SG・Cookie セッション・キャッシュ・OIDC・撤去は [基本設計案](architecture.md)、公式料金と構築・検証・撤去を含む 60 時間の試算は [費用見積もり](costs.md)を参照してください。調査済みの仕様と実機での検証済み事項を区別します。
 
-DB・API・4画面は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、対応は [design-review.md](design-review.md)です。認証の実装差分は [authentication.md](authentication.md)、コメント採用範囲・並行処理は [comments.md](comments.md)、過去の初回準備は [demo.md](demo.md)、画面の起動・操作・停止は [frontend.md](frontend.md)に記録します。詳細のコメント画面・公開運用は次工程です。
+DB・API・4画面は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、対応は [design-review.md](design-review.md)です。認証の実装差分は [authentication.md](authentication.md)、コメント採用範囲・並行処理は [comments.md](comments.md)、過去の初回準備は [demo.md](demo.md)、画面の起動・操作・停止は [frontend.md](frontend.md)に記録します。コメント画面まで接続済みです。公開運用は次工程です。
 
 運用前提は架空データ専用、構築・検証6時間/公開48時間/閉鎖・保存・撤去等6時間（初月は検証に応じ公開短縮）。同期間は保持、次回公開は新DBへの初期投入。snapshot取得後7日・通常最新1世代、アプリログ7日・アクセスログ30日。作成者が公開終了時の資格情報・セッション失効と削除結果確認を担当します。誤投入は期限を待たず対応し、詳細はDB文書のOPS-01～OPS-07に従います。
 
@@ -496,4 +496,31 @@ git diff --check
 if ($LASTEXITCODE -ne 0) { throw 'Diff check failed.' }
 ```
 
-起動は`& .\scripts\start_frontend.ps1`、URLは`http://127.0.0.1:5173/login`。ITアカウントは既存`.local/credentials.json`を手元で確認し、値を共有ログへ貼りません。データ保持の停止は[frontend.md](frontend.md)の手順を使います。コメント画面・Terraform/AWSは未実装。全ブラウザー/支援技術、実ネットワーク切断後のcommit判定、公開HTTPS/負荷は未検証です。過去の原因未特定のHTTP疎通失敗も解消済みとはしていません。
+起動は`& .\scripts\start_frontend.ps1`、URLは`http://127.0.0.1:5173/login`。ITアカウントは既存`.local/credentials.json`を手元で確認し、値を共有ログへ貼りません。データ保持の停止は[frontend.md](frontend.md)の手順を使います。この担当/状態工程時点ではコメント画面・Terraform/AWSは未実装でした。全ブラウザー/支援技術、実ネットワーク切断後のcommit判定、公開HTTPS/負荷は未検証です。過去の原因未特定のHTTP疎通失敗も解消済みとはしていません。
+
+## コメント画面の追加と検証（2026-09-30）
+
+SCR-04へAPI-11/12の一覧・投稿を接続しました。既存API・migration・lock・接続先ガードは変更せず、フロントエンドのCookie/CSRF・共通送信ガードを再利用。201後のGET失敗とPOST結果不明を区別し、完了409では下書き保持と投稿停止、401/419/404では消去します。[設計理由・FR/AC対応・詳しい結果](frontend.md)を参照してください。
+
+- モック129件（既存88件＋コメント40件＋API契約1件）、型・lint・ビルド・依存監査0件。
+- 隔離Chromium/通常Laravel/実PostgreSQLで本人・IT投稿/閲覧、別社員404、0/20/21/22件、HTML風本文非実行、親の版/日時不変、完了後のコメント保持、古い画面からの409と再送なしを確認。
+- 上記は応答で順番を確定する画面検証です。PHP全回帰270テスト・3,855アサーション・終了コード0に含む、異なるプロセス/接続の既存並行試験とは別です。
+- DB_HOST=dev-dbで専用テストを起動するとbootstrapが接続前拒否、期待した終了コード1。開発DBは4/4/4/1件、業務データと投入記録の前後一致を確認しました。
+- 開発DBの初期化・再投入・migration・volume削除なし。自動書込は専用隔離Composeだけです。GitHubの実行URL/対象SHA/結果と必須チェックは未確認です。
+
+再実行はルートのWindows PowerShellで行います。既存.env・Docker Desktopを使い、初期投入をやり直しません。script内と外部コマンド直後で失敗を停止させます。
+
+```powershell
+$ErrorActionPreference = 'Stop'
+& .\scripts\test_frontend.ps1
+docker compose --profile test run --rm test
+if ($LASTEXITCODE -ne 0) { throw 'PHP回帰テストに失敗しました。' }
+python scripts/secrets.py files
+if ($LASTEXITCODE -ne 0) { throw '秘密情報検査に失敗しました。' }
+python scripts/secrets.py staged
+if ($LASTEXITCODE -ne 0) { throw 'ステージ内容の検査に失敗しました。' }
+git diff --check
+if ($LASTEXITCODE -ne 0) { throw '差分形式の検査に失敗しました。' }
+```
+
+資格情報の手元での確認・起動/停止・過去のHTTP疎通失敗の切り分けは[frontend.md](frontend.md)の既存手順を維持します。今回も実ネットワーク切断、全支援技術、公開HTTPS/AWSは未検証。commit・pushは行いません。

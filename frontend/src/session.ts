@@ -1,6 +1,6 @@
 import { ApiError } from './api'
-import type { Api, Candidates, CurrentUser, Fields, Listing, RequestDetail, RequestInput, UserRef } from './api'
-import { blankDraft, validateRequest } from './request-input'
+import type { Api, Candidates, Comments, CurrentUser, Fields, Listing, RequestDetail, RequestInput, UserRef } from './api'
+import { blankDraft, validateComment, validateRequest } from './request-input'
 import { conflictMessage, transitions } from './workflow'
 import type { Status } from './workflow'
 
@@ -14,7 +14,13 @@ export interface ViewState {
   candidates: Candidates | null; candidatePage: number; loadingCandidates: boolean
   selectedAssignee: UserRef | null; selectedStatus: Status | ''; completionConfirmed: boolean
   workflowReady: boolean; workflowNotice: string; workflowResult: string
+  comments: Comments | null; commentPage: number; loadingComments: boolean; commentReadError: string
+  commentDraft: string; commentError: string; commentNotice: string
+  commentOutcome: 'idle' | 'sending' | 'unknown' | 'refresh' | 'success' | 'completed'
 }
+const commentInitial = { comments: null, commentPage: 1, loadingComments: false, commentReadError: '',
+  commentDraft: '', commentError: '', commentNotice: '', commentOutcome: 'idle' as const }
+const unknownComment = '投稿結果を確認できません。再投稿せず「詳細とコメントを確認」で表示を確認してください。同じ本文があるだけでは成功と断定できません。確認できない場合は作成者へ相談してください。'
 const workflowInitial = { candidates: null, candidatePage: 1, loadingCandidates: false,
   selectedAssignee: null, selectedStatus: '' as const, completionConfirmed: false,
   workflowReady: false, workflowNotice: '', workflowResult: '' }
@@ -22,7 +28,7 @@ const initial: ViewState = {
   phase: 'checking', user: null, listing: null, page: 1, busy: false,
   loadingList: false, csrfReady: false, notice: '', fields: {}, retryAt: 0, listRestricted: false,
   route: 'list', requestId: '', detail: null, draft: blankDraft(), submission: 'idle',
-  ...workflowInitial,
+  ...workflowInitial, ...commentInitial,
 }
 export function pageNumber(search: string): number | null {
   const params = new URLSearchParams(search)
@@ -44,6 +50,8 @@ export class Session {
   private candidateRead = new AbortController()
   private candidateGeneration = 0
   private suspended: ViewState | null = null
+  private commentRead = new AbortController()
+  private commentGeneration = 0
   path = '/requests?page=1'
   constructor(private api: Api, private navigate: (path: string, replace: boolean) => void) {}
   snapshot = () => this.state
@@ -53,6 +61,7 @@ export class Session {
     this.listeners.forEach(listener => listener())
   }
   private boundary() {
+    this.commentRead.abort(); this.commentGeneration++
     this.suspended = null
     this.candidateRead.abort(); this.candidateGeneration++
     this.read.abort(); this.listRead.abort()
@@ -69,10 +78,12 @@ export class Session {
     const saved = this.state
     this.conceal()
     if (saved.phase === 'authenticated' && saved.route === 'new' && !saved.busy) this.suspended = saved
+    if (saved.phase === 'authenticated' && saved.route === 'detail') this.suspended = saved.commentOutcome === 'sending'
+      ? { ...saved, commentOutcome: 'unknown', commentNotice: unknownComment } : saved
   }
   dirty = () => {
     const state = this.suspended ?? this.state
-    return state.route === 'new' && (state.draft.title !== '' || state.draft.body !== '' || state.draft.category !== 'inquiry')
+    return (state.route === 'detail' && state.commentDraft !== '') || (state.route === 'new' && (state.draft.title !== '' || state.draft.body !== '' || state.draft.category !== 'inquiry'))
   }
   canLeave = () => !this.mutation && (!this.dirty() || window.confirm('入力内容を破棄して移動しますか？'))
   async visit(path: string) {
@@ -91,6 +102,11 @@ export class Session {
     await pending
     if (restoring && id === this.generation && this.state.user?.id === saved.user?.id && this.state.route === 'new' && this.state.user?.role === 'employee') {
       this.update({ draft: saved.draft, fields: saved.fields, submission: saved.submission, notice: saved.notice })
+    }
+    if (id === this.generation && saved.route === 'detail' && this.state.route === 'detail' && this.state.detail?.id === saved.requestId && this.state.user?.id === saved.user?.id) {
+      this.update({ commentDraft: saved.commentDraft, commentError: saved.commentError,
+        commentOutcome: saved.commentOutcome, commentNotice: saved.commentNotice })
+      if (saved.commentPage !== 1) await this.loadComments(saved.commentPage)
     }
   }
   async open(path = window.location.pathname, search = window.location.search) {
@@ -250,17 +266,23 @@ export class Session {
     const id = this.generation, readId = ++this.listGeneration
     this.listRead.abort(); this.listRead = new AbortController()
     this.candidateRead.abort(); this.candidateGeneration++
+    this.commentRead.abort(); this.commentGeneration++
+    this.update({ comments: null, loadingComments: false, commentReadError: '' })
     this.update({ ...workflowInitial, workflowNotice, detail: null, loadingList: true, notice: '' })
     try {
       const { data } = await this.api.detail(this.state.requestId, this.listRead.signal)
       if (id !== this.generation || readId !== this.listGeneration) return
       this.update({ detail: data })
       if (refreshCandidates && this.manageable()) await this.loadCandidates(1, true)
+      if (id === this.generation && readId === this.listGeneration && this.state.detail) await this.loadComments(this.state.commentPage, true)
     } catch (error) {
       if (id !== this.generation || readId !== this.listGeneration) return
       const status = error instanceof ApiError ? error.status : 0
       if ([401, 419].includes(status)) await this.guest(this.boundary(), 'セッションが終了しました。再度ログインしてください。')
-      else this.update({ notice: status === 404 ? '対象が見つかりません。' : status === 403 ? 'この操作は利用できません。' : '詳細を取得できませんでした。接続と起動状態を確認して再読込してください。' })
+      else {
+        if ([403, 404].includes(status)) this.clearComments()
+        this.update({ notice: status === 404 ? '対象が見つかりません。' : status === 403 ? 'この操作は利用できません。' : '詳細を取得できませんでした。接続と起動状態を確認して再読込してください。' })
+      }
     } finally {
       if (id === this.generation && readId === this.listGeneration) this.update({ loadingList: false })
     }
@@ -281,7 +303,7 @@ export class Session {
       const failure = error instanceof ApiError ? error : new ApiError(0)
       this.update({ selectedAssignee: null, selectedStatus: '', completionConfirmed: false })
       if ([401, 419].includes(failure.status)) await this.guest(this.boundary(), 'セッションが終了しました。再度ログインしてください。')
-      else if ([403, 404].includes(failure.status)) this.update({ detail: null, workflowNotice: '', notice: failure.status === 404 ? '対象が見つかりません。' : 'この操作は利用できません。' })
+      else if ([403, 404].includes(failure.status)) { this.clearComments(); this.update({ detail: null, workflowNotice: '', notice: failure.status === 404 ? '対象が見つかりません。' : 'この操作は利用できません。' }) }
       // Bound recovery to one detail GET; never recurse if completion races again.
       else if (failure.status === 409) await this.loadDetail(true, conflictMessage(failure.code), false)
       else this.update({ workflowNotice: '担当候補を取得できませんでした。更新せず、最新情報を確認してください。' })
@@ -329,13 +351,89 @@ export class Session {
       if (id !== this.generation) return
       const failure = error instanceof ApiError ? error : new ApiError(0)
       if ([401, 419].includes(failure.status)) await this.guest(this.boundary(), 'セッションが終了しました。再度ログインしてください。')
-      else if ([403, 404].includes(failure.status)) this.update({ ...workflowInitial, detail: null, notice: failure.status === 404 ? '対象が見つかりません。' : 'この操作は利用できません。' })
+      else if ([403, 404].includes(failure.status)) { this.clearComments(); this.update({ ...workflowInitial, detail: null, notice: failure.status === 404 ? '対象が見つかりません。' : 'この操作は利用できません。' }) }
       else if (failure.status === 409 || failure.status === 422) {
         await this.loadDetail(true, failure.status === 409 ? conflictMessage(failure.code) : '指定した担当者や入力を受け付けられませんでした。最新の候補と状態を確認して選び直してください。')
       } else this.update({ candidates: null, workflowNotice: '更新結果を確認できません。自動再送はしません。「最新情報を確認」で現在の担当・状態を確認してから、必要な操作を選び直してください。' })
     } finally {
       this.mutation = false
       this.update({ busy: false })
+    }
+  }
+  private clearComments() {
+    this.commentRead.abort(); this.commentGeneration++
+    this.update({ ...commentInitial })
+  }
+  async loadComments(page = this.state.commentPage, internal = false) {
+    if (!this.state.detail || this.state.phase !== 'authenticated' || (this.mutation && !internal) || !Number.isInteger(page) || page < 1 || page > 2147483647) return
+    const id = this.generation, sequence = ++this.commentGeneration
+    this.commentRead.abort(); this.commentRead = new AbortController()
+    this.update({ comments: null, commentPage: page, loadingComments: true, commentReadError: '' })
+    try {
+      const comments = await this.api.comments(this.state.requestId, page, this.commentRead.signal)
+      if (id === this.generation && sequence === this.commentGeneration) this.update({ comments })
+    } catch (error) {
+      if (id !== this.generation || sequence !== this.commentGeneration) return
+      const status = error instanceof ApiError ? error.status : 0
+      if ([401, 419].includes(status)) await this.guest(this.boundary(), 'セッションが終了しました。再度ログインしてください。')
+      else if ([403, 404].includes(status)) {
+        this.clearComments(); this.update({ ...workflowInitial, detail: null, notice: status === 404 ? '対象が見つかりません。' : 'この操作は利用できません。' })
+      } else this.update({ commentReadError: 'コメントを取得できませんでした。表示を更新してください。' })
+    } finally {
+      if (id === this.generation && sequence === this.commentGeneration) this.update({ loadingComments: false })
+    }
+  }
+  private canComment() {
+    return this.state.phase === 'authenticated' && !!this.state.detail && this.state.detail.status !== 'completed'
+      && !this.state.loadingList && !this.mutation && ['idle', 'success'].includes(this.state.commentOutcome)
+  }
+  editComment(body: string) {
+    if (this.canComment()) this.update({ commentDraft: body, commentError: '', commentNotice: '', commentOutcome: 'idle' })
+  }
+  discardComment() {
+    if (!this.mutation && this.state.detail) this.update({ commentDraft: '', commentError: '' })
+    // An unknown POST remains unknown even if its draft is discarded.
+  }
+  async refreshComments(internal = false) {
+    if (this.mutation && !internal) return
+    const id = this.generation, outcome = this.state.commentOutcome
+    await this.loadDetail(internal)
+    if (id !== this.generation || this.state.commentOutcome !== outcome) return
+    const last = this.state.comments?.meta.last_page
+    if (this.state.detail && last && last !== this.state.commentPage) await this.loadComments(last, internal)
+    if (id !== this.generation || this.state.commentOutcome !== outcome) return
+    if (outcome === 'refresh') this.update(this.state.detail && this.state.comments
+      ? { commentOutcome: 'success', commentNotice: 'コメントを投稿しました。' }
+      : { commentNotice: '投稿は成功しましたが表示更新に失敗しました。「詳細とコメントを確認」で表示だけを更新してください。' })
+  }
+  async postComment() {
+    if (!this.canComment()) return
+    const { body, error } = validateComment(this.state.commentDraft)
+    this.update({ commentError: error, commentNotice: error ? 'コメントの入力内容を確認してください。' : '' })
+    if (error) return
+    const id = this.generation, requestId = this.state.requestId
+    this.mutation = true
+    this.commentRead.abort(); this.commentGeneration++
+    this.update({ busy: true, loadingComments: false, commentOutcome: 'sending' })
+    try {
+      await this.api.comment(requestId, body)
+      if (id !== this.generation) return
+      this.update({ commentDraft: '', commentError: '', commentOutcome: 'refresh',
+        commentNotice: '投稿は成功しました。表示を更新しています…' })
+      await this.refreshComments(true)
+    } catch (error) {
+      if (id !== this.generation) return
+      const failure = error instanceof ApiError ? error : new ApiError(0)
+      if ([401, 419].includes(failure.status)) await this.guest(this.boundary(), 'セッションが終了しました。再度ログインしてください。')
+      else if ([403, 404].includes(failure.status)) {
+        this.clearComments(); this.update({ ...workflowInitial, detail: null, notice: failure.status === 404 ? '対象が見つかりません。' : 'この操作は利用できません。' })
+      } else if (failure.status === 422) this.update({ commentOutcome: 'idle', commentError: failure.fields.body?.join(' ') || 'コメントの入力内容を確認してください。', commentNotice: 'コメントの入力内容を確認してください。' })
+      else if (failure.status === 409 && failure.code === 'request_completed') {
+        this.update({ commentOutcome: 'completed', commentNotice: '依頼は完了しているため投稿できません。下書きは送信されていません。内容を確認して破棄してください。' })
+        await this.refreshComments(true)
+      } else this.update({ commentOutcome: 'unknown', commentNotice: unknownComment })
+    } finally {
+      this.mutation = false; this.update({ busy: false })
     }
   }
 }

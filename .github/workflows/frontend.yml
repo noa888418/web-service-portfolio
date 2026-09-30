@@ -27,7 +27,7 @@ jobs:
         run: docker compose -f compose.e2e.yaml --profile e2e build e2e-api browser
       - name: Start isolated PostgreSQL, normal Laravel and Vite
         run: docker compose -f compose.e2e.yaml --profile e2e up -d --wait frontend
-      - name: Real browser auth, requests, workflow and stale-version conflict in isolated DB
+      - name: Real browser auth, requests, workflow and comments with ordered conflicts in isolated DB
         run: docker compose -f compose.e2e.yaml --profile e2e run --rm browser
       - name: Stop isolated test resources
         if: always()

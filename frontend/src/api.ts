@@ -12,6 +12,8 @@ export interface Listing {
 export interface RequestDetail extends RequestSummary { body: string; updated_at: string }
 export interface RequestInput { title: string; category: RequestSummary['category']; body: string }
 export interface Candidates { data: UserRef[]; meta: Listing['meta'] }
+export interface Comment { id: string; body: string; author: UserRef; created_at: string }
+export interface Comments { data: Comment[]; meta: Listing['meta'] }
 export const workflowCodes = ['stale_version', 'request_completed', 'no_change', 'invalid_transition', 'invalid_assignee_state'] as const
 export type Fields = Partial<Record<'email' | 'password' | 'title' | 'category' | 'body', string[]>>
 export class ApiError extends Error {
@@ -30,6 +32,8 @@ export interface Api {
   candidates(id: string, page: number, signal?: AbortSignal): Promise<Candidates>
   assignee(id: string, assigneeId: string | null, version: number): Promise<{ data: RequestDetail }>
   status(id: string, status: RequestSummary['status'], version: number): Promise<{ data: RequestDetail }>
+  comments(id: string, page: number, signal?: AbortSignal): Promise<Comments>
+  comment(id: string, body: string): Promise<{ data: Comment }>
 }
 async function request<T>(path: string, body?: object, signal?: AbortSignal, expectedStatus?: number, method?: 'PATCH'): Promise<T> {
   const controller = new AbortController()
@@ -59,7 +63,7 @@ async function request<T>(path: string, body?: object, signal?: AbortSignal, exp
         if (data?.error?.fields?.password) fields.password = ['パスワードは1～128文字で入力してください。']
         if (data?.error?.fields?.title) fields.title = ['タイトルは改行なしの1～100文字で入力してください。']
         if (data?.error?.fields?.category) fields.category = ['種別を選択してください。']
-        if (data?.error?.fields?.body) fields.body = ['内容は1～5000文字で入力してください。']
+        if (data?.error?.fields?.body) fields.body = [path.endsWith('/comments') ? 'コメントは1～2000文字で入力してください。' : '内容は1～5000文字で入力してください。']
       }
       const retry = Number(response.headers.get('Retry-After'))
       const code = workflowCodes.find(code => code === data?.error?.code) ?? ''
@@ -75,6 +79,8 @@ async function request<T>(path: string, body?: object, signal?: AbortSignal, exp
   }
 }
 export const api: Api = {
+  comments: (id, page, signal) => request(`/api/requests/${encodeURIComponent(id)}/comments?page=${page}`, undefined, signal),
+  comment: (id, body) => request(`/api/requests/${encodeURIComponent(id)}/comments`, { body }, undefined, 201),
   csrf: () => request<void>('/sanctum/csrf-cookie'),
   login: (email, password) => request<void>('/login', { email, password }),
   me: signal => request('/api/me', undefined, signal),

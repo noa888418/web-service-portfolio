@@ -2,6 +2,7 @@ import { chromium } from '@playwright/test'
 import { readFile, unlink } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { verifyWorkflow } from './workflow.mjs'
+import { verifyComments } from './comments.mjs'
 
 // Standalone runner intentionally has no Playwright trace/video/screenshot reporter:
 // a fill() failure must not put a password in a report or shared log.
@@ -89,7 +90,8 @@ try {
       assert.equal(await page.locator('.request-body').textContent(), createdBody)
       assert.equal(await page.locator('.request-body script, .request-body img').count(), 0)
       assert.equal(await page.evaluate(() => window.__bodyXss), undefined)
-      assert.equal(await page.locator('textarea').count(), 0)
+      assert.equal(await page.locator('textarea#body').count(), 0) // Creation form is gone; comment form is now supported.
+      assert.equal(await page.getByLabel(/コメント本文/).inputValue(), '')
       assert.equal(data.requester.display_name, '社員A'); assert.equal(data.status, 'open'); assert.equal(data.assignee, null); assert.equal(data.version, 1)
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
       await page.reload(); await page.getByRole('heading', { name: createdTitle, exact: true }).waitFor()
@@ -145,8 +147,9 @@ try {
     await page.setViewportSize({ width: 1280, height: 900 })
   }
   if (!local) await verifyWorkflow(browser, accounts, createdPath, value => { step = value })
+  if (!local) await verifyComments(browser, accounts, value => { step = value })
   console.log(local ? 'PASS: real Chromium + existing local demo; A/B/IT scopes, login/logout, direct routes, reload, narrow layout.'
-    : 'PASS: isolated real Chromium/Laravel/PostgreSQL; existing create/read/auth checks plus candidate paging, assignment/change/clear, 4 transitions/completion, employee 403, independent X/Y stale-version 409 without replay (sequential stale view, not simultaneous send).')
+    : 'PASS: isolated real Chromium/Laravel/PostgreSQL; auth/create/read/workflow retained; comments A/IT post/read, B 404, 0/20/21/22 paging, literal markup, parent unchanged, completion retains comments, stale draft 409 without replay. Ordered UI conflicts, not simultaneous send.')
 } catch (error) {
   console.error(`FAIL: browser step ${step}; ${error.name}; sensitive details omitted.`)
   process.exitCode = 1
