@@ -1,15 +1,19 @@
 import { ApiError } from './api'
-import type { Api, CurrentUser, Fields, Listing } from './api'
+import type { Api, CurrentUser, Fields, Listing, RequestDetail, RequestInput } from './api'
+import { blankDraft, validateRequest } from './request-input'
 
 export interface ViewState {
   phase: 'checking' | 'guest' | 'authenticated' | 'uncertain' | 'notFound'
   user: CurrentUser | null; listing: Listing | null; page: number
   busy: boolean; loadingList: boolean; csrfReady: boolean
   notice: string; fields: Fields; retryAt: number; listRestricted: boolean
+  route: 'list' | 'new' | 'detail'; requestId: string; detail: RequestDetail | null
+  draft: RequestInput; submission: 'idle' | 'sending' | 'unknown' | 'forbidden'
 }
 const initial: ViewState = {
   phase: 'checking', user: null, listing: null, page: 1, busy: false,
   loadingList: false, csrfReady: false, notice: '', fields: {}, retryAt: 0, listRestricted: false,
+  route: 'list', requestId: '', detail: null, draft: blankDraft(), submission: 'idle',
 }
 export function pageNumber(search: string): number | null {
   const params = new URLSearchParams(search)
@@ -28,6 +32,8 @@ export class Session {
   private listRead = new AbortController()
   private listGeneration = 0
   private mutation = false
+  private suspended: ViewState | null = null
+  path = '/requests?page=1'
   constructor(private api: Api, private navigate: (path: string, replace: boolean) => void) {}
   snapshot = () => this.state
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
@@ -36,45 +42,84 @@ export class Session {
     this.listeners.forEach(listener => listener())
   }
   private boundary() {
+    this.suspended = null
     this.read.abort(); this.listRead.abort()
     this.read = new AbortController(); this.listGeneration++
     this.update({ ...initial, page: this.state.page })
     return ++this.generation
   }
   conceal = () => {
+    const submitting = this.state.submission === 'sending'
     this.boundary()
-    this.update({ phase: 'uncertain', busy: this.mutation, notice: '認証状態を確認してから表示します。' })
+    this.update({ phase: 'uncertain', busy: this.mutation, notice: submitting ? '登録結果を確認できません。再送せず認証状態と一覧を確認してください。' : '認証状態を確認してから表示します。' })
+  }
+  suspend = () => {
+    const saved = this.state
+    this.conceal()
+    if (saved.phase === 'authenticated' && saved.route === 'new' && !saved.busy) this.suspended = saved
+  }
+  dirty = () => {
+    const state = this.suspended ?? this.state
+    return state.route === 'new' && (state.draft.title !== '' || state.draft.body !== '' || state.draft.category !== 'inquiry')
+  }
+  canLeave = () => !this.mutation && (!this.dirty() || window.confirm('入力内容を破棄して移動しますか？'))
+  async visit(path: string) {
+    if (!this.canLeave()) return
+    this.navigate(path, false)
+    const url = new URL(path, window.location.origin)
+    await this.open(url.pathname, url.search)
+  }
+  // Tab return revalidates identity before restoring an in-memory draft. No persistence.
+  async resume() {
+    if (this.mutation) return
+    const saved = this.suspended ?? this.state
+    const restoring = saved.phase === 'authenticated' && saved.route === 'new'
+    const pending = this.open()
+    const id = this.generation
+    await pending
+    if (restoring && id === this.generation && this.state.user?.id === saved.user?.id && this.state.route === 'new' && this.state.user?.role === 'employee') {
+      this.update({ draft: saved.draft, fields: saved.fields, submission: saved.submission, notice: saved.notice })
+    }
   }
   async open(path = window.location.pathname, search = window.location.search) {
     if (this.mutation) return
-    if (!['/', '/login', '/requests'].includes(path)) {
+    const match = /^\/requests\/([1-9][0-9]*)$/.exec(path)
+    const detailId = match && match[1].length <= 19 && BigInt(match[1]) <= 9223372036854775807n ? match[1] : ''
+    const route = path === '/requests/new' ? 'new' : detailId ? 'detail' : 'list'
+    if ((!['/', '/login', '/requests', '/requests/new'].includes(path) && !detailId) || (route !== 'list' && search)) {
       this.boundary(); this.update({ phase: 'notFound' }); return
     }
     const page = path === '/requests' ? pageNumber(search) : 1
     if (page === null) {
       this.boundary(); this.update({ phase: 'notFound', notice: 'ページ番号が正しくありません。' }); return
     }
-    await this.check(page)
+    this.path = path + search
+    await this.check(page, route, detailId)
   }
-  async check(page = this.state.page) {
+  async check(page = this.state.page, route = this.state.route, requestId = this.state.requestId) {
     if (this.mutation) return
     const id = this.boundary()
-    this.update({ busy: true, page })
+    this.update({ busy: true, page, route, requestId })
     try {
       const { data } = await this.api.me(this.read.signal)
       if (id !== this.generation) return
       this.update({ phase: 'authenticated', user: data, busy: false })
-      this.navigate(`/requests?page=${page}`, true)
-      await this.load(page)
+      if (route === 'list') {
+        this.path = `/requests?page=${page}`
+        this.navigate(this.path, true)
+        await this.load(page)
+      } else if (route === 'detail') await this.loadDetail()
+      else if (data.role !== 'employee') this.update({ submission: 'forbidden', notice: 'この操作は利用できません。' })
     } catch (error) {
       if (id !== this.generation) return
-      if (error instanceof ApiError && error.status === 401) await this.guest(id, '')
+      if (error instanceof ApiError && [401, 419].includes(error.status)) await this.guest(id, '')
       else this.update({ phase: 'uncertain', busy: false, notice: '認証状態を確認できません。接続と起動状態を確認して再確認してください。' })
     }
   }
   private async guest(id: number, notice: string, extra: Partial<ViewState> = {}) {
     if (id !== this.generation) return
     this.navigate('/login', true)
+    this.path = '/login'
     this.update({ phase: 'guest', user: null, listing: null, loadingList: false,
       busy: true, csrfReady: false, notice, fields: {}, ...extra })
     try {
@@ -97,6 +142,7 @@ export class Session {
       if (id !== this.generation) return
       this.update({ phase: 'authenticated', user: data, busy: false, page: 1 })
       this.navigate('/requests?page=1', true)
+      this.path = '/requests?page=1'
       await this.load(1)
     } catch (error) {
       if (id !== this.generation) return
@@ -152,6 +198,56 @@ export class Session {
   async go(page: number) {
     if (this.state.loadingList || this.mutation) return
     this.navigate(`/requests?page=${page}`, false)
+    this.path = `/requests?page=${page}`
     await this.load(page)
+  }
+  editDraft(values: Partial<RequestInput>) {
+    if (this.state.phase !== 'authenticated' || this.state.route !== 'new' || this.state.user?.role !== 'employee' || this.state.submission !== 'idle' || this.mutation) return
+    this.update({ draft: { ...this.state.draft, ...values }, fields: {}, notice: '' })
+  }
+  async create() {
+    if (this.mutation || this.state.phase !== 'authenticated' || this.state.route !== 'new' || this.state.user?.role !== 'employee' || this.state.submission !== 'idle') return
+    const { value, fields } = validateRequest(this.state.draft)
+    this.update({ fields, notice: Object.keys(fields).length ? '入力内容を確認してください。' : '' })
+    if (Object.keys(fields).length) return
+    const id = this.generation
+    this.mutation = true
+    this.update({ busy: true, submission: 'sending' })
+    try {
+      const { data } = await this.api.create(value)
+      if (id !== this.generation) return
+      if (typeof data.id !== 'string' || !/^[1-9][0-9]*$/.test(data.id) || data.id.length > 19 || BigInt(data.id) > 9223372036854775807n) throw new ApiError(0)
+      this.update({ draft: blankDraft(), fields: {}, submission: 'idle', route: 'detail', requestId: data.id })
+      this.path = `/requests/${data.id}`
+      this.navigate(this.path, true)
+      await this.loadDetail()
+    } catch (error) {
+      if (id !== this.generation) return
+      const failure = error instanceof ApiError ? error : new ApiError(0)
+      if ([401, 419].includes(failure.status)) await this.guest(this.boundary(), 'セッションが終了しました。再度ログインしてください。')
+      else if (failure.status === 422) this.update({ submission: 'idle', fields: failure.fields, notice: '入力内容を確認してください。' })
+      else if (failure.status === 403) this.update({ draft: blankDraft(), submission: 'forbidden', notice: 'この操作は利用できません。' })
+      else this.update({ submission: 'unknown', notice: '登録結果を確認できません。再送せず一覧を確認してください。同じ文面の依頼があるだけでは登録成功と判断できません。確認できない場合は作成者へ相談してください。' })
+    } finally {
+      this.mutation = false
+      this.update({ busy: false })
+    }
+  }
+  async loadDetail() {
+    if (this.state.phase !== 'authenticated' || this.state.route !== 'detail') return
+    const id = this.generation, readId = ++this.listGeneration
+    this.listRead.abort(); this.listRead = new AbortController()
+    this.update({ detail: null, loadingList: true, notice: '' })
+    try {
+      const { data } = await this.api.detail(this.state.requestId, this.listRead.signal)
+      if (id === this.generation && readId === this.listGeneration) this.update({ detail: data })
+    } catch (error) {
+      if (id !== this.generation || readId !== this.listGeneration) return
+      const status = error instanceof ApiError ? error.status : 0
+      if ([401, 419].includes(status)) await this.guest(this.boundary(), 'セッションが終了しました。再度ログインしてください。')
+      else this.update({ notice: status === 404 ? '対象が見つかりません。' : status === 403 ? 'この操作は利用できません。' : '詳細を取得できませんでした。接続と起動状態を確認して再読込してください。' })
+    } finally {
+      if (id === this.generation && readId === this.listGeneration) this.update({ loadingList: false })
+    }
   }
 }

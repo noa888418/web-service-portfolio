@@ -17,6 +17,9 @@ try {
   let dialogs = 0
   page.on('dialog', async dialog => { dialogs++; await dialog.dismiss() })
   const titles = {}
+  let createdPath
+  const createdTitle = '画面登録検証・架空の相談😀'
+  const createdBody = '<script>window.__bodyXss=1</script>\n<img src=x onerror="window.__bodyXss=1">\n架空の内容・次行'
   for (const key of ['employee_a', 'employee_b', 'it_x', 'it_y']) {
     step = key + ' direct /login and reload'
     await page.goto('/login'); await page.reload()
@@ -61,6 +64,73 @@ try {
       await page.reload(); await page.waitForSelector('tbody tr')
       assert.match(page.url(), /page=2$/)
     }
+    // Every writing scenario is confined to the guarded, isolated test project.
+    if (!local && key === 'employee_a') {
+      step = 'employee A creation form direct route, reload and discard guard'
+      await page.getByRole('link', { name: '依頼を登録', exact: true }).click()
+      await page.getByLabel(/^タイトル/).waitFor()
+      await page.reload(); await page.getByLabel(/^タイトル/).waitFor()
+      await page.getByLabel(/^タイトル/).fill(createdTitle)
+      await page.getByRole('link', { name: '一覧へ戻る' }).click()
+      assert.match(page.url(), /\/requests\/new$/) // dialog is dismissed, input remains
+      assert.equal(await page.getByLabel(/^タイトル/).inputValue(), createdTitle)
+      await page.getByLabel(/^種別/).selectOption('improvement')
+      await page.getByLabel(/^内容/).fill(createdBody)
+      await page.setViewportSize({ width: 390, height: 844 })
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+      step = 'employee A create to returned-ID detail'
+      const creation = page.waitForResponse(response => response.url().endsWith('/api/requests') && response.request().method() === 'POST')
+      await page.getByRole('button', { name: '登録する', exact: true }).click()
+      const response = await creation; assert.equal(response.status(), 201)
+      const { data } = await response.json(); createdPath = `/requests/${data.id}`
+      await page.waitForURL('**' + createdPath)
+      await page.getByRole('heading', { name: createdTitle, exact: true }).waitFor()
+      assert.equal(await page.locator('.request-body').textContent(), createdBody)
+      assert.equal(await page.locator('.request-body script, .request-body img').count(), 0)
+      assert.equal(await page.evaluate(() => window.__bodyXss), undefined)
+      assert.equal(await page.locator('textarea').count(), 0)
+      assert.equal(data.requester.display_name, '社員A'); assert.equal(data.status, 'open'); assert.equal(data.assignee, null); assert.equal(data.version, 1)
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+      await page.reload(); await page.getByRole('heading', { name: createdTitle, exact: true }).waitFor()
+      await page.getByRole('link', { name: '一覧へ戻る' }).click(); await page.waitForSelector('tbody tr')
+      // Fixture timestamps may put the new row on either page; locate by returned ID, not text alone.
+      let link = page.locator(`a[href="${createdPath}"]`)
+      if (!(await link.count())) { await page.getByRole('button', { name: '次へ', exact: true }).click(); await page.waitForSelector('tbody tr'); link = page.locator(`a[href="${createdPath}"]`) }
+      assert.equal(await link.textContent(), createdTitle)
+      await link.click(); await page.getByRole('heading', { name: createdTitle, exact: true }).waitFor()
+    }
+    if (!local && key !== 'employee_a') {
+      step = key + ' created detail scope and direct reload'
+      await page.goto(createdPath); await page.reload()
+      if (key === 'employee_b') {
+        await page.getByText('対象が見つかりません。', { exact: true }).waitFor()
+        assert.equal(await page.locator('.request-body').count(), 0)
+      } else {
+        await page.getByRole('heading', { name: createdTitle, exact: true }).waitFor()
+        assert.equal(await page.locator('.request-body').textContent(), createdBody)
+        step = key + ' IT creation UI and server refusal'
+        await page.goto('/requests/new'); await page.getByText('この操作は利用できません。', { exact: true }).waitFor()
+        assert.equal(await page.locator('textarea').count(), 0)
+        const status = await page.evaluate(async () => {
+          const cookie = document.cookie.split('; ').find(value => value.startsWith('XSRF-TOKEN='))
+          const response = await fetch('/api/requests', { method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-XSRF-TOKEN': decodeURIComponent(cookie.slice('XSRF-TOKEN='.length)) }, body: JSON.stringify({ title: '拒否確認', category: 'inquiry', body: '隔離環境専用' }) })
+          return response.status
+        })
+        assert.equal(status, 403)
+        await page.goto('/requests'); await page.waitForSelector('tbody tr')
+        // Completed data is seeded on the second page of the full IT listing.
+        await page.getByRole('button', { name: '次へ', exact: true }).click(); await page.waitForSelector('tbody tr')
+        await page.locator('tr').filter({ has: page.locator('.completed') }).locator('.title-cell a').click()
+        await page.getByText('完了した依頼です。', { exact: true }).waitFor()
+      }
+    }
+    if (!local) {
+      step = key + ' nonexistent detail matches forbidden display'
+      await page.goto('/requests/9223372036854775807')
+      await page.getByText('対象が見つかりません。', { exact: true }).waitFor()
+      assert.equal(await page.locator('.request-body').count(), 0)
+      await page.getByRole('link', { name: '一覧へ戻る' }).click(); await page.waitForSelector('tbody tr')
+    }
     step = key + ' narrow layout and logout'
     await page.setViewportSize({ width: 390, height: 844 })
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
@@ -74,7 +144,7 @@ try {
     await page.setViewportSize({ width: 1280, height: 900 })
   }
   console.log(local ? 'PASS: real Chromium + existing local demo; A/B/IT scopes, login/logout, direct routes, reload, narrow layout.'
-    : 'PASS: real Chromium + isolated PostgreSQL/Laravel; A/B/IT scopes, login/logout, direct routes, reload, pagination, XSS text, narrow layout.')
+    : 'PASS: real Chromium + isolated PostgreSQL/Laravel; creation/detail/list, A/B/IT scopes, IT POST 403, completed/404, discard guard, login/logout, direct routes/reload, pagination, title/body XSS text, narrow layout.')
 } catch (error) {
   console.error(`FAIL: browser step ${step}; ${error.name}; sensitive details omitted.`)
   process.exitCode = 1

@@ -2,7 +2,7 @@
 
 ## 状態・共通契約
 
-FR-09のローカル初期投入はWeb APIを追加せず、OPS-02/03のArtisanコマンドで実装しました。既存12 APIは通常public/index.php経由でも検証済みです。[ローカルHTTPと初期投入](demo.md)を参照してください。今回Reactのログイン/一覧からAPI-01～05へVite proxy経由で接続しました。[画面実装](frontend.md)を参照してください。登録/詳細画面・公開経路は未検証です。
+FR-09のローカル初期投入はWeb APIを追加せず、OPS-02/03のArtisanコマンドで実装しました。既存12 APIは通常public/index.php経由でも検証済みです。[ローカルHTTPと初期投入](demo.md)を参照してください。Reactのログイン/一覧に続き、社員登録と詳細閲覧からAPI-06/07へVite proxy経由で接続しました。以下のAPI契約に変更はありません。[画面実装](frontend.md)を参照してください。担当/状態/コメント画面と公開経路は未検証です。
 
 2026-09-27に認証API-01～04と依頼API-05～07、09-28に担当/状態API-08～10を実装しました。続く今回の工程でFR-05/08・AC-14のコメントを採用し、API-11/12も実装しています。認証はSanctum Cookie、PostgreSQL session、無操作30分・絶対8時間、正規化メール5回/IP30回（各60秒）を維持します。[コメント実装](comments.md)、[担当/状態](request-workflow.md)、[依頼API](requests.md)、[認証記録](authentication.md)、[開発手順](development.md)を参照してください。
 

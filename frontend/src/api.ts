@@ -9,7 +9,9 @@ export interface Listing {
   data: RequestSummary[]
   meta: { current_page: number; per_page: number; total: number; last_page: number }
 }
-export type Fields = Partial<Record<'email' | 'password', string[]>>
+export interface RequestDetail extends RequestSummary { body: string; updated_at: string }
+export interface RequestInput { title: string; category: RequestSummary['category']; body: string }
+export type Fields = Partial<Record<'email' | 'password' | 'title' | 'category' | 'body', string[]>>
 export class ApiError extends Error {
   constructor(public status: number, public fields: Fields = {}, public retryAfter = 0) {
     super('API request failed') // Never capture body, credentials or Cookies in errors.
@@ -21,8 +23,10 @@ export interface Api {
   me(signal?: AbortSignal): Promise<{ data: CurrentUser }>
   logout(): Promise<void>
   requests(page: number, signal?: AbortSignal): Promise<Listing>
+  detail(id: string, signal?: AbortSignal): Promise<{ data: RequestDetail }>
+  create(input: RequestInput): Promise<{ data: RequestDetail }>
 }
-async function request<T>(path: string, body?: object, signal?: AbortSignal): Promise<T> {
+async function request<T>(path: string, body?: object, signal?: AbortSignal, expectedStatus?: number): Promise<T> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 15000)
   const abort = () => controller.abort()
@@ -48,11 +52,14 @@ async function request<T>(path: string, body?: object, signal?: AbortSignal): Pr
         // Only known field names, and static text: never echo arbitrary upstream content.
         if (data?.error?.fields?.email) fields.email = ['メールアドレスを確認してください。']
         if (data?.error?.fields?.password) fields.password = ['パスワードは1～128文字で入力してください。']
+        if (data?.error?.fields?.title) fields.title = ['タイトルは改行なしの1～100文字で入力してください。']
+        if (data?.error?.fields?.category) fields.category = ['種別を選択してください。']
+        if (data?.error?.fields?.body) fields.body = ['内容は1～5000文字で入力してください。']
       }
       const retry = Number(response.headers.get('Retry-After'))
       throw new ApiError(response.status, fields, Number.isFinite(retry) && retry > 0 ? Math.ceil(retry) : 60)
     }
-    if (response.status !== 204 && !json) throw new ApiError(0)
+    if ((expectedStatus !== undefined && response.status !== expectedStatus) || (response.status !== 204 && !json)) throw new ApiError(0)
     return data as T
   } catch (error) {
     throw error instanceof ApiError ? error : new ApiError(0)
@@ -67,4 +74,6 @@ export const api: Api = {
   me: signal => request('/api/me', undefined, signal),
   logout: () => request<void>('/logout', {}),
   requests: (page, signal) => request(`/api/requests?page=${page}`, undefined, signal),
+  detail: (id, signal) => request(`/api/requests/${encodeURIComponent(id)}`, undefined, signal),
+  create: ({ title, category, body }) => request('/api/requests', { title, category, body }, undefined, 201),
 }

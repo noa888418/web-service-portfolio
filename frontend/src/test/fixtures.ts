@@ -12,8 +12,11 @@ export function listing(title = '端末の相談', page = 1, total = 21): Listin
 export function mockedApi() {
   return { csrf: vi.fn<Api['csrf']>().mockResolvedValue(), login: vi.fn<Api['login']>().mockResolvedValue(),
     me: vi.fn<Api['me']>().mockRejectedValue(new ApiError(401)), logout: vi.fn<Api['logout']>().mockResolvedValue(),
-    requests: vi.fn<Api['requests']>().mockResolvedValue(listing()) }
+    requests: vi.fn<Api['requests']>().mockResolvedValue(listing()),
+    detail: vi.fn<Api['detail']>().mockResolvedValue({ data: detail() }),
+    create: vi.fn<Api['create']>().mockResolvedValue({ data: detail() }) }
 }
+export function detail(id = '1') { return { ...listing().data[0], id, body: '架空の内容\n2行目', updated_at: '2026-09-29T00:30:00.000000Z' } }
 export function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void

@@ -33,7 +33,7 @@ describe('screens (mock API and jsdom)', () => {
     await screen.findByText('メールアドレスまたはパスワードを確認してください。')
     expect(screen.getByLabelText(/^パスワード/)).toHaveValue('')
   })
-  it('renders plain text, Japanese labels, JST and unassigned without unimplemented links', async () => {
+  it('renders plain text, Japanese labels, JST and safe implemented links', async () => {
     const { api } = mount(true)
     api.requests.mockResolvedValue(listing('<img src=x onerror=alert(1)>'))
     await screen.findByText('<img src=x onerror=alert(1)>')
@@ -41,7 +41,8 @@ describe('screens (mock API and jsdom)', () => {
     expect(screen.getByText('未対応')).toBeInTheDocument()
     expect(screen.getByText('未割当')).toBeInTheDocument()
     expect(screen.getByText('2026/09/29 09:30')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /登録|詳細/ })).toBeNull()
+    expect(screen.getByRole('link', { name: '依頼を登録' })).toHaveAttribute('href', '/requests/new')
+    expect(screen.getByRole('link', { name: '<img src=x onerror=alert(1)>' })).toHaveAttribute('href', '/requests/1')
   })
   it('moves pages only by user action and retains server order', async () => {
     const { api, user } = mount(true)

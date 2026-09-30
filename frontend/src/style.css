@@ -1,7 +1,7 @@
 :root { font-family: "Segoe UI", "Yu Gothic UI", Meiryo, sans-serif; color: #20323a; background: #f3f6f7; font-synthesis: none; line-height: 1.65; }
 * { box-sizing: border-box; }
 body { margin: 0; }
-button, input { font: inherit; }
+button, input, textarea, select { font: inherit; }
 button { cursor: pointer; border: 1px solid #b5c4cb; border-radius: 6px; padding: .55rem 1rem; color: #24414d; background: white; font-weight: 600; min-height: 44px; }
 button:hover:not(:disabled) { background: #e6eff1; border-color: #277280; }
 button:disabled { cursor: not-allowed; opacity: .55; }
@@ -22,7 +22,15 @@ h1 { font-size: 1.7rem; letter-spacing: .02em; margin: .3rem 0 .4rem; line-heigh
 .subtle { color: #566e79; font-size: .88rem; margin: .4rem 0 1.2rem; }
 label { display: block; margin: 1.2rem 0 .4rem; font-size: .9rem; font-weight: 600; }
 .required { font-size: .65rem; background: #e8eff0; padding: .15rem .35rem; border-radius: 3px; margin-left: .3rem; }
-input { display: block; width: 100%; border: 1px solid #9cafb8; border-radius: 5px; padding: .65rem .75rem; background: white; }
+input, textarea, select { display: block; width: 100%; border: 1px solid #9cafb8; border-radius: 5px; padding: .65rem .75rem; background: white; }
+textarea { resize: vertical; }
+.request-card { max-width: 880px; margin: auto; background: white; border: 1px solid #dce4e8; border-radius: 10px; padding: clamp(1rem, 3vw, 2rem); }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }
+.detail-title, .request-body, dd { overflow-wrap: anywhere; }
+.request-body { white-space: pre-wrap; padding: 1rem; background: #f3f6f7; border-radius: 6px; }
+.detail-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; }
+.detail-meta dt { font-size: .8rem; color: #526976; }
+.detail-meta dd { margin: .25rem 0 0; }
 small { font-size: .74rem; color: #526976; }
 .field-error { display: block; color: #a3312a; font-size: .82rem; }
 input[aria-invalid="true"] { border-color: #a3312a; }
