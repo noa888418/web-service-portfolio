@@ -1,6 +1,8 @@
 # DB・API・画面の横断設計レビュー
 
-2026-09-22作成、09-29更新。API・ローカル初期投入・SCR-01/02に続き、SCR-03社員登録・SCR-04詳細閲覧を実装しました。[画面の実装・テスト対応](frontend.md)、[初期投入](demo.md)、[コメント](comments.md)、[担当/状態](request-workflow.md)、[依頼API](requests.md)を参照してください。SCR-04の担当/状態/コメント画面とAWSでの公開投入は未実装です。以下の対応表は全体設計を含み、未実装画面を成功済みとしません。[要件](requirements.md)、[DB](database.md)、[API](api.md)、[画面](screens.md)、[セキュリティ](security.md)、[認証実装](authentication.md)と合わせて参照します。
+2026-09-30：FR-06/07・AC-10/11/14のSCR-04操作欄を実装しました。API-08候補→API-09担当/PATCH・API-10状態/PATCH→users/service_requestsの対応とサーバー認可は維持。最新の[モック・隔離実ブラウザー結果](frontend.md)を参照してください。X/Yの古い画面による409は逐次操作で検証し、DBの同時更新試験はPHP回帰で維持しています。以下の過去記録中の「担当/状態画面未実装」は当時の状態です。
+
+2026-09-22作成、09-29更新。API・ローカル初期投入・SCR-01/02に続き、SCR-03社員登録・SCR-04詳細閲覧を実装しました。[画面の実装・テスト対応](frontend.md)、[初期投入](demo.md)、[コメント](comments.md)、[担当/状態](request-workflow.md)、[依頼API](requests.md)を参照してください。SCR-04のコメント画面とAWSでの公開投入は未実装です。以下の対応表は全体設計を含み、未実装画面を成功済みとしません。[要件](requirements.md)、[DB](database.md)、[API](api.md)、[画面](screens.md)、[セキュリティ](security.md)、[認証実装](authentication.md)と合わせて参照します。
 
 ## FR → 画面 → API / 管理手順 → テーブル
 
@@ -90,7 +92,8 @@ ID 例は A=1、B=2、X=3、Y=4。以下は実行結果ではなく、設計に�
 | コメント / 実PostgreSQL・HTTP | API-11/12、FK/NOT NULL/CHECK、親削除CASCADE/投稿者RESTRICT、認可・本文・ページング、投稿対完了の両順序・2投稿、保存失敗rollback | Comments 43テスト・769アサーション成功。全体236 / 3,488。別利用者/別Cookie/2 HTTP worker・同期点を使用。[詳細](comments.md) |
 | Reactログイン/一覧 | FR-01/02/04→SCR-01/02→API-01～05→users・sessions・cache・service_requests。通信世代・非再送・状態消去、エラー、ページング、label/focus、XSS文字列 | モック33テスト、実Chromium/実PGのA/B/X/Y・20/21件・XSS非実行成功。[詳細](frontend.md) |
 | React 登録/詳細閲覧 | SCR-03 / SCR-04本文、API-06/07、登録→詳細→一覧・A/B/IT認可・HTML風本文非実行 | 隔離実ブラウザー成功。[モックと実APIの区別](frontend.md) |
-| Laravel / React（残り） | 担当/状態/コメントの画面、全アクセシビリティ | 未実施、次工程 |
+| React 担当/状態 | SCR-04操作欄、API-08～10、候補/版/許可遷移 | モック・隔離ブラウザー成功。古いX/Y画面の逐次更新409とDB実並行処理を区別 |
+| Laravel / React（残り） | コメントの画面、全アクセシビリティ | 未実施、次工程 |
 | FR-09 / 実PostgreSQL・通常HTTP | 用途/実接続/許可、空DBと記録、no-op、途中失敗rollback、別processの同期付き同時投入、初期資格情報でAPI-01～12 | Demo 34テスト・367アサーション成功。全体270 / 3,855。Windows開発DBの投入・保持した再起動も確認。[詳細](demo.md) |
 | 実PostgreSQL（残り） | 同時INSERTのメール競合、公開DB権限分離 | 未実施。ローカルseedの成功をAWSの対象照合・管理権限の保証に広げない |
 | ローカル結合（残り） | 実ネットワーク切断での結果不明、実HTTPS、全ブラウザー | 未実施。Reactログイン/一覧と実Cookie/HTTPは検証済み、通信失敗はモックで区別 |

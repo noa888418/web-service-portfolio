@@ -2,7 +2,9 @@
 
 ## 状態と目的
 
-**題材「社内IT依頼・改善管理サービス」は決定済みです。** API・ローカルdemo投入・SCR-01/02に続き、SCR-03社員登録とSCR-04閲覧部分を採用・実装しました。[画面実装](frontend.md)、[初期投入](demo.md)、[コメント実装](comments.md)、[担当/状態](request-workflow.md)、[依頼API](requests.md)、[認証](authentication.md)を参照してください。担当/状態/コメント画面・AWS運用の詳細は提案のままで、FR / AC全体の検証済みを意味しません。
+2026-09-30追加採用：SCR-04の担当/状態操作（FR-06・FR-07、AC-14の画面側競合回復）を実装しました。IT・未完了だけ操作可、許可4遷移・完了後変更不可、409理由別案内・再取得/選び直し・更新自動再送禁止を採用します。コメント画面は引き続き次工程です。[今回の検証](frontend.md)を参照してください。以下の履歴よりこの追記を最新の画面範囲とします。
+
+**題材「社内IT依頼・改善管理サービス」は決定済みです。** API・ローカルdemo投入・SCR-01/02に続き、SCR-03社員登録とSCR-04閲覧部分を採用・実装しました。[画面実装](frontend.md)、[初期投入](demo.md)、[コメント実装](comments.md)、[担当/状態](request-workflow.md)、[依頼API](requests.md)、[認証](authentication.md)を参照してください。コメント画面・AWS運用の詳細は提案のままで、FR / AC全体の検証済みを意味しません。
 
 技術はReact + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsに決定しました。AWS月額予算3,000円、構築から撤去まで月60時間程度、事前案内期間のみ公開、独自ドメイン未所有も決定・確認済みです。AWSの具体的な構成と認証方式は [基本設計案](architecture.md)、構築・検証・撤去を含む時間と費用の条件は [見積もり](costs.md)で整理します。
 

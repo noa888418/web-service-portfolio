@@ -2,7 +2,7 @@
 
 ## プロジェクトの決定事項と現在の範囲
 
-最新工程は**React社員登録・詳細閲覧**です。[frontend.md](frontend.md)に採用版と、失敗時停止付きPowerShellの起動/検証/停止手順を記録しました。ブラウザーは127.0.0.1:5173へ統一します。以下の従来工程の記録は当時の範囲を残し、今回の結果は末尾に追記します。
+最新工程は**React詳細の担当・状態変更**です。[frontend.md](frontend.md)に採用版と、失敗時停止付きPowerShellの起動/検証/停止手順を記録しました。ブラウザーは127.0.0.1:5173へ統一します。以下の従来工程の記録は当時の範囲を残し、今回の結果は末尾に追記します。
 
 React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsの使用は決定済みです。AWS月額予算は3,000円、構築から撤去まで月60時間程度、公開は事前案内期間のみ。独自ドメインは未所有です。
 
@@ -10,7 +10,7 @@ React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、Gi
 
 AWS のサブネット・SG・Cookie セッション・キャッシュ・OIDC・撤去は [基本設計案](architecture.md)、公式料金と構築・検証・撤去を含む 60 時間の試算は [費用見積もり](costs.md)を参照してください。調査済みの仕様と実機での検証済み事項を区別します。
 
-DB・API・4画面は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、対応は [design-review.md](design-review.md)です。認証の実装差分は [authentication.md](authentication.md)、コメント採用範囲・並行処理は [comments.md](comments.md)、過去の初回準備は [demo.md](demo.md)、画面の起動・操作・停止は [frontend.md](frontend.md)に記録します。詳細の担当/状態/コメント画面・公開運用は次工程です。
+DB・API・4画面は [database.md](database.md)、[api.md](api.md)、[screens.md](screens.md)、対応は [design-review.md](design-review.md)です。認証の実装差分は [authentication.md](authentication.md)、コメント採用範囲・並行処理は [comments.md](comments.md)、過去の初回準備は [demo.md](demo.md)、画面の起動・操作・停止は [frontend.md](frontend.md)に記録します。詳細のコメント画面・公開運用は次工程です。
 
 運用前提は架空データ専用、構築・検証6時間/公開48時間/閉鎖・保存・撤去等6時間（初月は検証に応じ公開短縮）。同期間は保持、次回公開は新DBへの初期投入。snapshot取得後7日・通常最新1世代、アプリログ7日・アクセスログ30日。作成者が公開終了時の資格情報・セッション失効と削除結果確認を担当します。誤投入は期限を待たず対応し、詳細はDB文書のOPS-01～OPS-07に従います。
 
@@ -462,3 +462,38 @@ if ($LASTEXITCODE -ne 0) { throw 'Diff check failed.' }
 ```
 
 画面起動は`& .\scripts\start_frontend.ps1`、URLは`http://127.0.0.1:5173/login`。資格情報の手元確認とデータを保持した停止方法は[frontend.md](frontend.md)の通りです。登録を伴う自動テストに既存ローカルdemoモードを使いません。
+
+## 2026-09-30 担当・状態変更画面の追加記録
+
+開始HEADは`0233ca9683b2d9d4a839b84cc4448fb53a5555ad`、未コミット差分なし。SCR-04にIT/未完了だけの操作欄を追加しました。担当候補20件・ページをまたいだ選択、許可4遷移、完了確認、返却versionの採用、409理由別回復、結果不明時の非再送を実装。[設計理由と操作](frontend.md)、[画面仕様](screens.md)、[維持したバックエンド契約](request-workflow.md)を参照してください。
+
+新規ライブラリや対応版の変更はありません。依存lock・API/認証/transaction/既存migration/接続先ガード・既存58モックテストの内容・PHP270テストを維持。テスト専用browser-serverに候補19人を追加し、既存ITと合計21人にしました。用途限定のランダムパスワードのハッシュだけを隔離DBへ入れ、資格情報の追加配布・ログ出力はしません。開発DBへの初期化/再投入/自動登録/更新とvolume削除は行っていません。
+
+| 検証 | 今回の結果 |
+| --- | --- |
+| 型・lint・build・npm audit | 終了コード0、依存監査0件 |
+| Vitest/jsdomモック | 88テスト成功。既存58件に担当/状態29件・PATCH契約1件。候補ページ/選択保持、許可遷移、共通guard、409各code/422/503・401/419、再取得失敗、遅い候補/更新応答、完了確認・focus |
+| 隔離実ブラウザー/通常Laravel/PG | 候補20/1件、割当・変更・open解除、担当外IT、4遷移・完了後操作/候補GETなし、社員の候補GET/両PATCH403、狭幅。既存ログイン/登録/一覧/詳細の検証も維持 |
+| 独立X/Yコンテキスト | 同じ版の詳細を開き、X更新commit後に古いYの要求が409→最新表示/選択解除・自動再送なし。その後Yの明示選択/送信だけが新versionで成功。逐次の古い画面試験で、同時送信の再現ではない |
+| PHP全回帰 | 270テスト・3,855アサーション・終了コード0。別HTTPプロセス/DB接続と同期点による既存並行処理試験を維持 |
+| 接続先ガード | DB_HOST=dev-db指定を接続前に拒否（意図した終了コード1） |
+| 保全・最終確認 | 開発業務3表/投入記録の内容を非表示で前後比較。4/4/4/1件を維持。ローカルリンク・差分/空白・Gitleaks files/stagedを確認 |
+
+`scripts/test_frontend.ps1`でWindowsから全フロント検査と隔離ブラウザー検証・後片付けまで成功しました。既存frontend CIが全モックと拡張E2E runnerを実行する構成です。PHP/Gitleaks workflowを維持し、必須チェック設定・GitHub上の対象SHA/実行URL/成功は未確認。commit/pushは行っていません。
+
+再実行はリポジトリのルートで次を実行します。script内部を含め、各失敗で停止します。
+
+```powershell
+$ErrorActionPreference = 'Stop'
+& .\scripts\test_frontend.ps1
+docker compose --profile test run --rm test
+if ($LASTEXITCODE -ne 0) { throw 'PHP regression failed.' }
+python scripts/secrets.py files
+if ($LASTEXITCODE -ne 0) { throw 'Gitleaks files failed.' }
+python scripts/secrets.py staged
+if ($LASTEXITCODE -ne 0) { throw 'Gitleaks staged failed.' }
+git diff --check
+if ($LASTEXITCODE -ne 0) { throw 'Diff check failed.' }
+```
+
+起動は`& .\scripts\start_frontend.ps1`、URLは`http://127.0.0.1:5173/login`。ITアカウントは既存`.local/credentials.json`を手元で確認し、値を共有ログへ貼りません。データ保持の停止は[frontend.md](frontend.md)の手順を使います。コメント画面・Terraform/AWSは未実装。全ブラウザー/支援技術、実ネットワーク切断後のcommit判定、公開HTTPS/負荷は未検証です。過去の原因未特定のHTTP疎通失敗も解消済みとはしていません。

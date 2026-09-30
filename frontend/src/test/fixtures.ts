@@ -14,7 +14,10 @@ export function mockedApi() {
     me: vi.fn<Api['me']>().mockRejectedValue(new ApiError(401)), logout: vi.fn<Api['logout']>().mockResolvedValue(),
     requests: vi.fn<Api['requests']>().mockResolvedValue(listing()),
     detail: vi.fn<Api['detail']>().mockResolvedValue({ data: detail() }),
-    create: vi.fn<Api['create']>().mockResolvedValue({ data: detail() }) }
+    create: vi.fn<Api['create']>().mockResolvedValue({ data: detail() }),
+    candidates: vi.fn<Api['candidates']>().mockResolvedValue({ data: [x], meta: { current_page: 1, per_page: 20, total: 1, last_page: 1 } }),
+    assignee: vi.fn<Api['assignee']>().mockResolvedValue({ data: { ...detail(), assignee: x, version: 2 } }),
+    status: vi.fn<Api['status']>().mockResolvedValue({ data: { ...detail(), assignee: x, status: 'in_progress', version: 3 } }) }
 }
 export function detail(id = '1') { return { ...listing().data[0], id, body: '架空の内容\n2行目', updated_at: '2026-09-29T00:30:00.000000Z' } }
 export function deferred<T>() {

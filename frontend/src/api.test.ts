@@ -1,5 +1,16 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { api, ApiError } from './api'
+it('PATCH uses Cookie/CSRF, exact expected_version and a safe error code allowlist', async () => {
+  const fetch = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ data: { id: '1', version: 42 } }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'no_change', message: 'private upstream' } }), { status: 409, headers: { 'Content-Type': 'application/json' } }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'private upstream' } }), { status: 409, headers: { 'Content-Type': 'application/json' } }))
+  vi.stubGlobal('fetch', fetch); document.cookie = 'XSRF-TOKEN=fixture%3D; path=/'
+  await api.assignee('1', null, 7)
+  expect(fetch).toHaveBeenCalledWith('/api/requests/1/assignee', expect.objectContaining({ method: 'PATCH', credentials: 'same-origin', cache: 'no-store', body: JSON.stringify({ assignee_id: null, expected_version: 7 }), headers: expect.objectContaining({ 'X-XSRF-TOKEN': 'fixture=' }) }))
+  await expect(api.status('1', 'in_progress', 42)).rejects.toMatchObject({ status: 409, code: 'no_change', message: 'API request failed' })
+  expect(fetch.mock.calls[1][1].body).toBe(JSON.stringify({ status: 'in_progress', expected_version: 42 }))
+  await expect(api.status('1', 'completed', 42)).rejects.toMatchObject({ code: '' })
+})
 afterEach(() => { vi.unstubAllGlobals(); document.cookie = 'XSRF-TOKEN=; Max-Age=0; path=/' })
 it('sends only creation fields with CSRF and maps request field errors to static messages', async () => {
   const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { fields: { title: ['private'], body: ['private'], category: ['private'], requester_id: ['private'] } } }), { status: 422, headers: { 'Content-Type': 'application/json' } }))

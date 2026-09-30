@@ -3,6 +3,7 @@ import type { FormEvent, ReactNode } from 'react'
 import type { Fields, RequestSummary } from './api'
 import type { Session, ViewState } from './session'
 import { normalizeText } from './request-input'
+import { WorkflowControls } from './WorkflowControls'
 
 const roles = { employee: '社員', it_staff: 'IT担当者' }
 const categories = { inquiry: '問い合わせ', bug: '不具合', improvement: '改善要望' }
@@ -103,9 +104,13 @@ function NewRequest({ state, session }: { state: ViewState; session: Session }) 
 }
 function RequestDetailView({ state, session }: { state: ViewState; session: Session }) {
   const row = state.detail
+  const result = useRef<HTMLParagraphElement>(null)
+  useEffect(() => { if (state.workflowResult) result.current?.focus() }, [state.workflowResult])
   return <section className="request-card" aria-labelledby="page-title" aria-busy={state.loadingList}>
     <div className="page-heading"><div><span className="eyebrow">REQUEST DETAIL</span><h1 id="page-title" tabIndex={-1}>依頼詳細</h1></div><button disabled={state.loadingList || state.busy} onClick={() => void session.loadDetail()}>再読込</button></div>
     <Alert message={state.notice} />
+    <Alert message={state.workflowNotice} />
+    {state.workflowResult && <p className="result" role="status" tabIndex={-1} ref={result}>{state.workflowResult}</p>}
     {state.loadingList && <p role="status">詳細を読み込んでいます…</p>}
     {row && <>
       <h2 className="detail-title">{row.title}</h2>
@@ -120,7 +125,8 @@ function RequestDetailView({ state, session }: { state: ViewState; session: Sess
       </dl>
       <h2>内容</h2><p className="request-body">{row.body}</p>
       {row.status === 'completed' && <p role="status">完了した依頼です。</p>}
-      <p className="subtle">この画面は閲覧専用です。担当・状態の変更とコメント表示・投稿は今後追加します。</p>
+      <WorkflowControls state={state} session={session} />
+      <p className="subtle">コメント表示・投稿は今後追加します。</p>
     </>}
     <RouteLink session={session} to="/requests">一覧へ戻る</RouteLink>
   </section>

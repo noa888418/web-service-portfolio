@@ -1,6 +1,8 @@
 import { ApiError } from './api'
-import type { Api, CurrentUser, Fields, Listing, RequestDetail, RequestInput } from './api'
+import type { Api, Candidates, CurrentUser, Fields, Listing, RequestDetail, RequestInput, UserRef } from './api'
 import { blankDraft, validateRequest } from './request-input'
+import { conflictMessage, transitions } from './workflow'
+import type { Status } from './workflow'
 
 export interface ViewState {
   phase: 'checking' | 'guest' | 'authenticated' | 'uncertain' | 'notFound'
@@ -9,11 +11,18 @@ export interface ViewState {
   notice: string; fields: Fields; retryAt: number; listRestricted: boolean
   route: 'list' | 'new' | 'detail'; requestId: string; detail: RequestDetail | null
   draft: RequestInput; submission: 'idle' | 'sending' | 'unknown' | 'forbidden'
+  candidates: Candidates | null; candidatePage: number; loadingCandidates: boolean
+  selectedAssignee: UserRef | null; selectedStatus: Status | ''; completionConfirmed: boolean
+  workflowReady: boolean; workflowNotice: string; workflowResult: string
 }
+const workflowInitial = { candidates: null, candidatePage: 1, loadingCandidates: false,
+  selectedAssignee: null, selectedStatus: '' as const, completionConfirmed: false,
+  workflowReady: false, workflowNotice: '', workflowResult: '' }
 const initial: ViewState = {
   phase: 'checking', user: null, listing: null, page: 1, busy: false,
   loadingList: false, csrfReady: false, notice: '', fields: {}, retryAt: 0, listRestricted: false,
   route: 'list', requestId: '', detail: null, draft: blankDraft(), submission: 'idle',
+  ...workflowInitial,
 }
 export function pageNumber(search: string): number | null {
   const params = new URLSearchParams(search)
@@ -32,6 +41,8 @@ export class Session {
   private listRead = new AbortController()
   private listGeneration = 0
   private mutation = false
+  private candidateRead = new AbortController()
+  private candidateGeneration = 0
   private suspended: ViewState | null = null
   path = '/requests?page=1'
   constructor(private api: Api, private navigate: (path: string, replace: boolean) => void) {}
@@ -43,6 +54,7 @@ export class Session {
   }
   private boundary() {
     this.suspended = null
+    this.candidateRead.abort(); this.candidateGeneration++
     this.read.abort(); this.listRead.abort()
     this.read = new AbortController(); this.listGeneration++
     this.update({ ...initial, page: this.state.page })
@@ -220,7 +232,7 @@ export class Session {
       this.update({ draft: blankDraft(), fields: {}, submission: 'idle', route: 'detail', requestId: data.id })
       this.path = `/requests/${data.id}`
       this.navigate(this.path, true)
-      await this.loadDetail()
+      await this.loadDetail(true)
     } catch (error) {
       if (id !== this.generation) return
       const failure = error instanceof ApiError ? error : new ApiError(0)
@@ -233,14 +245,17 @@ export class Session {
       this.update({ busy: false })
     }
   }
-  async loadDetail() {
-    if (this.state.phase !== 'authenticated' || this.state.route !== 'detail') return
+  async loadDetail(internal = false, workflowNotice = '', refreshCandidates = true) {
+    if ((this.mutation && !internal) || this.state.phase !== 'authenticated' || this.state.route !== 'detail') return
     const id = this.generation, readId = ++this.listGeneration
     this.listRead.abort(); this.listRead = new AbortController()
-    this.update({ detail: null, loadingList: true, notice: '' })
+    this.candidateRead.abort(); this.candidateGeneration++
+    this.update({ ...workflowInitial, workflowNotice, detail: null, loadingList: true, notice: '' })
     try {
       const { data } = await this.api.detail(this.state.requestId, this.listRead.signal)
-      if (id === this.generation && readId === this.listGeneration) this.update({ detail: data })
+      if (id !== this.generation || readId !== this.listGeneration) return
+      this.update({ detail: data })
+      if (refreshCandidates && this.manageable()) await this.loadCandidates(1, true)
     } catch (error) {
       if (id !== this.generation || readId !== this.listGeneration) return
       const status = error instanceof ApiError ? error.status : 0
@@ -248,6 +263,79 @@ export class Session {
       else this.update({ notice: status === 404 ? '対象が見つかりません。' : status === 403 ? 'この操作は利用できません。' : '詳細を取得できませんでした。接続と起動状態を確認して再読込してください。' })
     } finally {
       if (id === this.generation && readId === this.listGeneration) this.update({ loadingList: false })
+    }
+  }
+  private manageable() {
+    return this.state.phase === 'authenticated' && this.state.route === 'detail' && this.state.user?.role === 'it_staff' && !!this.state.detail && this.state.detail.status !== 'completed'
+  }
+  async loadCandidates(page = this.state.candidatePage, internal = false) {
+    if (!this.manageable() || (this.mutation && !internal) || !Number.isInteger(page) || page < 1 || page > 2147483647) return
+    const id = this.generation, candidateId = ++this.candidateGeneration
+    this.candidateRead.abort(); this.candidateRead = new AbortController()
+    this.update({ candidates: null, candidatePage: page, loadingCandidates: true, workflowReady: false })
+    try {
+      const candidates = await this.api.candidates(this.state.requestId, page, this.candidateRead.signal)
+      if (id === this.generation && candidateId === this.candidateGeneration) this.update({ candidates, workflowReady: true })
+    } catch (error) {
+      if (id !== this.generation || candidateId !== this.candidateGeneration) return
+      const failure = error instanceof ApiError ? error : new ApiError(0)
+      this.update({ selectedAssignee: null, selectedStatus: '', completionConfirmed: false })
+      if ([401, 419].includes(failure.status)) await this.guest(this.boundary(), 'セッションが終了しました。再度ログインしてください。')
+      else if ([403, 404].includes(failure.status)) this.update({ detail: null, workflowNotice: '', notice: failure.status === 404 ? '対象が見つかりません。' : 'この操作は利用できません。' })
+      // Bound recovery to one detail GET; never recurse if completion races again.
+      else if (failure.status === 409) await this.loadDetail(true, conflictMessage(failure.code), false)
+      else this.update({ workflowNotice: '担当候補を取得できませんでした。更新せず、最新情報を確認してください。' })
+    } finally {
+      if (id === this.generation && candidateId === this.candidateGeneration) this.update({ loadingCandidates: false })
+    }
+  }
+  private canUpdate() { return this.manageable() && this.state.workflowReady && !this.state.loadingList && !this.state.loadingCandidates && !this.mutation }
+  selectAssignee(id: string) {
+    if (!this.canUpdate()) return
+    const candidate = this.state.candidates?.data.find(candidate => candidate.id === id)
+    if (candidate) this.update({ selectedAssignee: candidate, workflowResult: '' })
+  }
+  selectStatus(status: Status | '') {
+    if (!this.canUpdate() || !this.state.detail?.assignee) return
+    if (status === '' || transitions[this.state.detail.status].includes(status)) this.update({ selectedStatus: status, completionConfirmed: false, workflowResult: '' })
+  }
+  confirmCompletion(confirmed: boolean) {
+    if (this.canUpdate() && this.state.selectedStatus === 'completed') this.update({ completionConfirmed: confirmed })
+  }
+  async changeAssignee(clear = false) {
+    if (!this.canUpdate() || !this.state.detail) return
+    if (clear ? this.state.detail.status !== 'open' || !this.state.detail.assignee : !this.state.selectedAssignee) return
+    const value = clear ? null : this.state.selectedAssignee!.id
+    await this.changeWorkflow('assignee', value)
+  }
+  async changeStatus() {
+    const { detail, selectedStatus, completionConfirmed } = this.state
+    if (!this.canUpdate() || !detail?.assignee || !selectedStatus || !transitions[detail.status].includes(selectedStatus) || (selectedStatus === 'completed' && !completionConfirmed)) return
+    await this.changeWorkflow('status', selectedStatus)
+  }
+  private async changeWorkflow(kind: 'assignee' | 'status', value: string | null) {
+    const row = this.state.detail!, id = this.generation
+    this.mutation = true
+    this.candidateRead.abort(); this.candidateGeneration++
+    this.listRead.abort(); this.listGeneration++
+    this.update({ busy: true, workflowReady: false, selectedAssignee: null, selectedStatus: '', completionConfirmed: false, workflowNotice: '', workflowResult: '' })
+    try {
+      const { data } = kind === 'assignee' ? await this.api.assignee(row.id, value, row.version) : await this.api.status(row.id, value as Status, row.version)
+      if (id !== this.generation) return
+      if (data.id !== row.id || !Number.isInteger(data.version) || data.version < 1 || data.version > 2147483647) throw new ApiError(0)
+      this.update({ ...workflowInitial, detail: data, workflowResult: kind === 'assignee' ? '担当者を変更しました。' : '状態を変更しました。' })
+      if (this.manageable()) await this.loadCandidates(1, true)
+    } catch (error) {
+      if (id !== this.generation) return
+      const failure = error instanceof ApiError ? error : new ApiError(0)
+      if ([401, 419].includes(failure.status)) await this.guest(this.boundary(), 'セッションが終了しました。再度ログインしてください。')
+      else if ([403, 404].includes(failure.status)) this.update({ ...workflowInitial, detail: null, notice: failure.status === 404 ? '対象が見つかりません。' : 'この操作は利用できません。' })
+      else if (failure.status === 409 || failure.status === 422) {
+        await this.loadDetail(true, failure.status === 409 ? conflictMessage(failure.code) : '指定した担当者や入力を受け付けられませんでした。最新の候補と状態を確認して選び直してください。')
+      } else this.update({ candidates: null, workflowNotice: '更新結果を確認できません。自動再送はしません。「最新情報を確認」で現在の担当・状態を確認してから、必要な操作を選び直してください。' })
+    } finally {
+      this.mutation = false
+      this.update({ busy: false })
     }
   }
 }

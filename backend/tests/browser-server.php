@@ -19,6 +19,16 @@ try {
     chmod($path, 0600);
     config(['demo.purpose' => 'demo']);
     app(DemoSeeder::class)->run('test', 'browser-test', '1', true, $path);
+    // Candidate pagination fixture, isolated by bootstrap's DB/schema guard.
+    // No additional distributed credentials: these random passwords are discarded.
+    $candidateHash = \Illuminate\Support\Facades\Hash::make(bin2hex(random_bytes(32)));
+    for ($i = 1; $i <= 19; $i++) {
+        DB::table('users')->insert([
+            'display_name' => '候補検証'.sprintf('%02d', $i), 'email' => 'candidate-'.$i.'@example.test',
+            'password' => $candidateHash, 'role' => 'it_staff', 'is_active' => true, 'auth_version' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
     $owner = DB::table('users')->where('email', DemoSeeder::ACCOUNTS['employee_a'][0])->value('id');
     for ($i = 0; $i < 19; $i++) {
         DB::table('service_requests')->insert([

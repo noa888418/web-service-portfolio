@@ -1,6 +1,7 @@
 import { chromium } from '@playwright/test'
 import { readFile, unlink } from 'node:fs/promises'
 import assert from 'node:assert/strict'
+import { verifyWorkflow } from './workflow.mjs'
 
 // Standalone runner intentionally has no Playwright trace/video/screenshot reporter:
 // a fill() failure must not put a password in a report or shared log.
@@ -143,8 +144,9 @@ try {
     await page.goto('/requests'); await page.getByRole('heading', { name: 'ログイン', exact: true }).waitFor()
     await page.setViewportSize({ width: 1280, height: 900 })
   }
+  if (!local) await verifyWorkflow(browser, accounts, createdPath, value => { step = value })
   console.log(local ? 'PASS: real Chromium + existing local demo; A/B/IT scopes, login/logout, direct routes, reload, narrow layout.'
-    : 'PASS: real Chromium + isolated PostgreSQL/Laravel; creation/detail/list, A/B/IT scopes, IT POST 403, completed/404, discard guard, login/logout, direct routes/reload, pagination, title/body XSS text, narrow layout.')
+    : 'PASS: isolated real Chromium/Laravel/PostgreSQL; existing create/read/auth checks plus candidate paging, assignment/change/clear, 4 transitions/completion, employee 403, independent X/Y stale-version 409 without replay (sequential stale view, not simultaneous send).')
 } catch (error) {
   console.error(`FAIL: browser step ${step}; ${error.name}; sensitive details omitted.`)
   process.exitCode = 1

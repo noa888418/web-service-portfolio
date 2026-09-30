@@ -28,6 +28,14 @@ textarea { resize: vertical; }
 .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; margin: 1rem 0; }
 .detail-title, .request-body, dd { overflow-wrap: anywhere; }
 .request-body { white-space: pre-wrap; padding: 1rem; background: #f3f6f7; border-radius: 6px; }
+.workflow { margin: 2rem 0; border-top: 1px solid #dce4e8; padding-top: 1rem; }
+.workflow fieldset { min-width: 0; margin: 1rem 0; border: 1px solid #b5c4cb; border-radius: 6px; padding: 1rem; }
+.workflow legend { font-weight: 600; }
+.candidate-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .25rem 1rem; }
+.radio-label { display: flex; align-items: center; gap: .7rem; margin: .3rem 0; min-height: 44px; overflow-wrap: anywhere; }
+.radio-label input { width: 20px; height: 20px; flex: 0 0 20px; }
+.selection, .result { padding: .75rem; background: #e2f2eb; border-radius: 6px; overflow-wrap: anywhere; }
+.completion-confirm { margin-top: 1rem; }
 .detail-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; }
 .detail-meta dt { font-size: .8rem; color: #526976; }
 .detail-meta dd { margin: .25rem 0 0; }

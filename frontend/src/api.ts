@@ -11,9 +11,11 @@ export interface Listing {
 }
 export interface RequestDetail extends RequestSummary { body: string; updated_at: string }
 export interface RequestInput { title: string; category: RequestSummary['category']; body: string }
+export interface Candidates { data: UserRef[]; meta: Listing['meta'] }
+export const workflowCodes = ['stale_version', 'request_completed', 'no_change', 'invalid_transition', 'invalid_assignee_state'] as const
 export type Fields = Partial<Record<'email' | 'password' | 'title' | 'category' | 'body', string[]>>
 export class ApiError extends Error {
-  constructor(public status: number, public fields: Fields = {}, public retryAfter = 0) {
+  constructor(public status: number, public fields: Fields = {}, public retryAfter = 0, public code = '') {
     super('API request failed') // Never capture body, credentials or Cookies in errors.
   }
 }
@@ -25,8 +27,11 @@ export interface Api {
   requests(page: number, signal?: AbortSignal): Promise<Listing>
   detail(id: string, signal?: AbortSignal): Promise<{ data: RequestDetail }>
   create(input: RequestInput): Promise<{ data: RequestDetail }>
+  candidates(id: string, page: number, signal?: AbortSignal): Promise<Candidates>
+  assignee(id: string, assigneeId: string | null, version: number): Promise<{ data: RequestDetail }>
+  status(id: string, status: RequestSummary['status'], version: number): Promise<{ data: RequestDetail }>
 }
-async function request<T>(path: string, body?: object, signal?: AbortSignal, expectedStatus?: number): Promise<T> {
+async function request<T>(path: string, body?: object, signal?: AbortSignal, expectedStatus?: number, method?: 'PATCH'): Promise<T> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 15000)
   const abort = () => controller.abort()
@@ -40,7 +45,7 @@ async function request<T>(path: string, body?: object, signal?: AbortSignal, exp
       if (cookie) headers['X-XSRF-TOKEN'] = decodeURIComponent(cookie.slice('XSRF-TOKEN='.length))
     }
     const response = await fetch(path, {
-      method: body === undefined ? 'GET' : 'POST', headers,
+      method: method ?? (body === undefined ? 'GET' : 'POST'), headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: controller.signal,
     })
@@ -57,7 +62,8 @@ async function request<T>(path: string, body?: object, signal?: AbortSignal, exp
         if (data?.error?.fields?.body) fields.body = ['内容は1～5000文字で入力してください。']
       }
       const retry = Number(response.headers.get('Retry-After'))
-      throw new ApiError(response.status, fields, Number.isFinite(retry) && retry > 0 ? Math.ceil(retry) : 60)
+      const code = workflowCodes.find(code => code === data?.error?.code) ?? ''
+      throw new ApiError(response.status, fields, Number.isFinite(retry) && retry > 0 ? Math.ceil(retry) : 60, code)
     }
     if ((expectedStatus !== undefined && response.status !== expectedStatus) || (response.status !== 204 && !json)) throw new ApiError(0)
     return data as T
@@ -76,4 +82,7 @@ export const api: Api = {
   requests: (page, signal) => request(`/api/requests?page=${page}`, undefined, signal),
   detail: (id, signal) => request(`/api/requests/${encodeURIComponent(id)}`, undefined, signal),
   create: ({ title, category, body }) => request('/api/requests', { title, category, body }, undefined, 201),
+  candidates: (id, page, signal) => request(`/api/requests/${encodeURIComponent(id)}/assignee-candidates?page=${page}`, undefined, signal),
+  assignee: (id, assigneeId, version) => request(`/api/requests/${encodeURIComponent(id)}/assignee`, { assignee_id: assigneeId, expected_version: version }, undefined, 200, 'PATCH'),
+  status: (id, status, version) => request(`/api/requests/${encodeURIComponent(id)}/status`, { status, expected_version: version }, undefined, 200, 'PATCH'),
 }
