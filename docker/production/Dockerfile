@@ -4,7 +4,7 @@ RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS postgresql-dev oniguru
     && docker-php-ext-install -j2 pdo_pgsql opcache mbstring
 
 FROM php:8.4.26-fpm-alpine3.24@sha256:78cd8de9970a9cd6ff4d98860a94eb5bf37dd2d5776b4785562dbfad01c29d5a AS php-base
-RUN apk add --no-cache libpq oniguruma \
+RUN apk add --no-cache libpq oniguruma 'nghttp2-libs>=1.70.0-r0' \
     && addgroup -g 10001 app && adduser -D -u 10001 -G app app \
     && rm -rf /usr/src/php* /usr/local/include/php /usr/local/lib/php/build \
     && rm -f /usr/local/bin/phpize /usr/local/bin/php-config /usr/local/bin/docker-php-ext-* /usr/local/bin/docker-php-source
@@ -47,6 +47,7 @@ COPY docker/production/npm-inventory.mjs /build-inventory.mjs
 RUN npm run build && node /build-inventory.mjs
 
 FROM nginx:1.30.5-alpine-slim@sha256:32463212baf0e7d91aded2e9b843a4f2b9e017804b8c9d5bae7b51dcef64389c AS nginx
+RUN apk add --no-cache 'pcre2>=10.49-r0'
 COPY --from=frontend /build/dist /srv/www
 # Retain dependency metadata outside the web root for SBOM/vulnerability inventory.
 COPY frontend/package.json frontend/package-lock.json /usr/share/portfolio-inventory/
