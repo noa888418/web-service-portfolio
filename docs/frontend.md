@@ -1,5 +1,7 @@
 # React基盤・ログイン・依頼一覧・登録・詳細・担当/状態・コメント
 
+2026-10-01追加：開発Vite構成を維持し、[本番Nginx配信・HTTPS/FPM検証](production.md)を追加しました。GET /loginはSPA、POST /loginはLaravelです。詳細URLのcomment_pageとAPI pageの変換・ページ変更時のURL置換を追加し、最終136モックテスト・型/lint/build/auditが成功しました。既存129件は維持。実HTTPSの同一依頼の登録から完了までの結果はリンク先で区別します。AWS・GitHub CIでの今回の成功は未確認です。
+
 ## 今回の採用範囲（2026-09-30）
 
 SCR-04にコメント一覧・投稿を追加しました。今回の採用範囲はFR-05のコメント閲覧・FR-08、AC-05～09・12～14・18・19の画面です。社員は本人依頼、ITは全件で閲覧し、完了前だけ投稿できます。AWS・Terraformは未実装です。[画面](screens.md)、[API契約](api.md)、[コメントAPI](comments.md)、[認証](authentication.md)、[既存demo](demo.md)を参照してください。
@@ -81,7 +83,7 @@ FR-06 / AC-10はSCR-04→API-08/09→users/service_requests、FR-07 / AC-11はAP
 
 ## コメントの設計判断・FR/AC対応
 
-[Comments.tsx](../frontend/src/Comments.tsx)は専用の一覧と投稿欄、[session.ts](../frontend/src/session.ts)はメモリー上の下書き・送信結果・通信世代を管理します。詳細の認可後にAPI-11を呼び、20件・日時/ID昇順をそのまま表示。ページはURLに追加せずメモリーだけに持ち、直接アクセス/再読み込みは1ページ目です。同一依頼のページ移動では下書きを維持します。
+[Comments.tsx](../frontend/src/Comments.tsx)は専用の一覧と投稿欄、[session.ts](../frontend/src/session.ts)はメモリー上の下書き・送信結果・通信世代を管理します。詳細の認可後にAPI-11を呼び、20件・日時/ID昇順をそのまま表示。2026-10-01の本番配信工程で`comment_page`を追加しました。省略時は1、指定時は正の整数（上限2147483647・重複/未知query拒否）としてAPIのpageへ渡し、直接アクセス/再読み込みを同じページにします。ページ移動はURLをreplaceし、同一依頼の下書きはメモリーで維持します。本文や資格情報はURLへ出しません。
 
 API-12へはbodyだけを送り、Unicode空白除去・CRLF/CR→LF・1～2000コードポイント・NUL/不正サロゲート拒否をAPIと揃えます。本文はHTML/Markdownとして解釈しません。親version/updated_atは変更せず、再取得したサーバー値を使います。担当/状態/投稿を共通の同期的ガードで直列化し、Enterや二重クリック、相互の同時送信を止めます。
 

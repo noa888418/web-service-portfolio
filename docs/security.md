@@ -2,6 +2,20 @@
 
 ## 状態と適用範囲
 
+**2026-10-01の現在の状態**：認証・依頼・担当/状態・コメントのAPIとReact画面、本番Nginx/PHP-FPM、隔離ローカルHTTPS、Trivy image検査・SBOMを実装しました。AWS・Terraform・公開デモ投入は未実施です。以下の過去工程の「未実装」は当時の記録で、現在の範囲はこの節と[本番検証記録](production.md)を優先します。
+
+| 守るデータ → 脅威 | 実装した対策 | 検証済み | 未検証・限界 |
+| --- | --- | --- | --- |
+| Cookie/資格情報 → 平文・偽造proxy・漏えい | production/debug=false、ローカルTLS終端、Secure/HttpOnly/Lax、X-Forwarded-*非採用、既存CSRF | 信頼済み隔離ChromiumでCookie属性・CSRF419・logout旧Cookie401、A/B分離、API no-store | CloudFront/ALB経路・trusted proxy・公開実IP |
+| アプリ/秘密値 → イメージ混入・過大権限 | allowlist context、multi-stage、USER10001、read-only、runtime注入、config cacheなし | 最終全レイヤーと設定に実行時秘密値・禁止ファイル不在、不要ツール不在、書込拒否 | 未知秘密値の完全検出は不可。Gitleaksを併用。ECS volume/UIDは未検証 |
+| 依存関係 → 既知脆弱性 | Trivy0.74.0で最終OS/Composer/npm、Critical/High・検査不能で失敗、unfixed一括除外なし | 両image全重大度0件、SBOMとimage ID/sha256の対応、React/Sanctum等のinventory | PHP本体のソースビルドbinaryはapk/Composer CVE検出外。公式修正版確認を併用し公開前再確認 |
+| 検証データ → 開発DB誤更新 | 別Compose/volume、元の接続先ガード、専用schema、別途明示seed | production構成で業務通し成功、既存270PHP試験のguard/並行処理維持 | AWS初期投入対象/権限 |
+| 秘密値 → ログ/成果物漏えい | method/status/timeのみのNginxログ、Laravel例外型のみ、traceなし、CIはreport JSONのみ | 実行時秘密値がPHP/Nginxログにないこと、証明書/資格情報のGit除外 | CloudWatch/ALB/CloudFrontのログ設定・保存期限 |
+
+Nginxのraw request付きerror logを抑止するため、診断情報は限定されます。安全な監視の設計、FPM強制終了・DB rollback・負荷/timeout、GitHub実行成功と必須チェックは公開前の課題です。ローカルTLS成功をAWS全経路の成功とは扱いません。
+
+### 過去工程の記録
+
 2026-09-30追加：担当/状態画面を実装しました。以下の以前の状態記録に優先し、コメント画面・AWSは未実装です。
 
 | 守るデータ → 脅威 | 今回の画面対策 | 検証 |
@@ -106,7 +120,7 @@
 
 ## 秘密情報検査の実装と検証状況
 
-この節はSEC-05・06・11のうちGitへの混入防止を対象とします。今回追加したローカルコンテナ・Composer監査は次節に分け、イメージ脆弱性検査・SBOM・Terraform / AWSの実環境の保護は未実装・未検証です。
+この節はSEC-05・06・11のうちGitへの混入防止の記録です。ローカルコンテナ・Composer監査は次節、2026-10-01に追加したイメージ検査・SBOMは冒頭と[production.md](production.md)に分けます。Terraform / AWSの実環境の保護は未実装・未検証です。
 
 | 対象 | 実装状況 | 検証状況 |
 | --- | --- | --- |
@@ -202,7 +216,7 @@ APP-SEC-01の認証、APP-SEC-02/03の依頼/コメント認可、APP-SEC-04の�
 
 Terraform の `sensitive` は表示を抑制する仕組みで、状態ファイルに秘密情報が保存されない保証ではありません。[HashiCorp の機密データ管理](https://developer.hashicorp.com/terraform/language/manage-sensitive-data)を踏まえ、状態ファイル自体を保護します。[GitHub の AWS OIDC ガイド](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws)を参照し、長期 AWS キーを保管しない方針案にしています。詳細な権限・復旧操作は実装前にレビューします。
 
-公開・撤去では state bucket や snapshot を一括 destroy に含めず、DB の復元確認と旧世代の削除を分離します。保存中は復号鍵を維持します。予算通知は強制停止ではないため、公開終了とリソース残存の確認を運用者が行う案です。依存関係・イメージ・SBOM・Terraform の追加検査案は基本設計に記載していますが、Gitleaks 以外の導入・検証を完了したとは扱いません。
+公開・撤去ではstate bucketやsnapshotを一括destroyに含めず、DB復元確認と旧世代削除を分離します。保存中は復号鍵を維持します。予算通知は強制停止ではないため公開終了と残存確認を運用者が行う案です。Gitleaks、Composer/npm audit、最終imageのTrivy/SBOMはローカル実施済みですが、Terraform・AWS検査や追加workflowのGitHub上の成功は未確認です。
 
 削除確認は作成者が行い、復元検証中の旧snapshotも7日期限を延長しません。誤投入では閉鎖・該当資格情報失効・影響調査・汚染したDB行/snapshot/ログの除去を先行させ、通常の保持期限を待ちません。削除操作の証跡に秘密値を転記せず、再復元による再混入を防ぎます。
 

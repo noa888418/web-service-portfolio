@@ -1,5 +1,7 @@
 # FR-01・FR-02 認証の実装と検証
 
+2026-10-01追加：[本番用コンテナ](production.md)の通常PHP-FPM + Nginxで、隔離ChromiumがCAを信頼するローカルHTTPSを検証しました。production/debug=false、Secure/HttpOnly/SameSite、CSRF419、logout後の旧Cookie401、no-storeと社員間の分離を確認。認証コード・排他順・試行制限は変更していません。Nginxは実接続のscheme/送信元を渡し、外部のX-Forwarded-*を信用しません。CloudFront/ALBでの実IP/HTTPS判断、FPM強制終了・AWSのtimeout/rollbackは未検証です。
+
 ## 採用範囲（2026-09-27）
 
 続くReact工程では、CSRF取得→login→me→一覧→logoutをViteの相対URL proxyと実Chromiumで確認しました。認証middleware・CSRF・試行制限・transactionは変更していません。画面でのデータ破棄・世代照合・通信失敗時の非再送は [frontend.md](frontend.md)に記録します。開発proxyのIP枠を共有し、未信頼の転送headerは引き続き採用しません。

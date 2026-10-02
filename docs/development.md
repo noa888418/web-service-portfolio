@@ -2,7 +2,7 @@
 
 ## プロジェクトの決定事項と現在の範囲
 
-最新工程は**React詳細のコメント一覧・投稿**です。[frontend.md](frontend.md)に採用版と、失敗時停止付きPowerShellの起動/検証/停止手順を記録しました。ブラウザーは127.0.0.1:5173へ統一します。以下の従来工程の記録は当時の範囲を残し、今回の結果は末尾に追記します。
+最新工程は**本番Nginx + PHP-FPMイメージ・隔離HTTPS統合検証**です。[production.md](production.md)に採用版・失敗時停止付きPowerShell・証明書更新・データ保持・検査証跡を記録しました。開発Viteの入口127.0.0.1:5173は維持し、本番構成の検証専用入口はhttps://localhost:8443です。以下の従来工程の記録は当時の範囲を残します。
 
 React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsの使用は決定済みです。AWS月額予算は3,000円、構築から撤去まで月60時間程度、公開は事前案内期間のみ。独自ドメインは未所有です。
 

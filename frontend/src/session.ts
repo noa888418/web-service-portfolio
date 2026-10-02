@@ -106,7 +106,7 @@ export class Session {
     if (id === this.generation && saved.route === 'detail' && this.state.route === 'detail' && this.state.detail?.id === saved.requestId && this.state.user?.id === saved.user?.id) {
       this.update({ commentDraft: saved.commentDraft, commentError: saved.commentError,
         commentOutcome: saved.commentOutcome, commentNotice: saved.commentNotice })
-      if (saved.commentPage !== 1) await this.loadComments(saved.commentPage)
+      if (saved.commentPage !== this.state.commentPage) await this.loadComments(saved.commentPage)
     }
   }
   async open(path = window.location.pathname, search = window.location.search) {
@@ -114,7 +114,12 @@ export class Session {
     const match = /^\/requests\/([1-9][0-9]*)$/.exec(path)
     const detailId = match && match[1].length <= 19 && BigInt(match[1]) <= 9223372036854775807n ? match[1] : ''
     const route = path === '/requests/new' ? 'new' : detailId ? 'detail' : 'list'
-    if ((!['/', '/login', '/requests', '/requests/new'].includes(path) && !detailId) || (route !== 'list' && search)) {
+    const commentParams = new URLSearchParams(search)
+    const commentPage = route === 'detail' && [...commentParams.keys()].every(key => key === 'comment_page')
+      && commentParams.getAll('comment_page').length <= 1
+      ? pageNumber(commentParams.has('comment_page') ? `?page=${encodeURIComponent(commentParams.get('comment_page')!)}` : '') : null
+    if ((!['/', '/login', '/requests', '/requests/new'].includes(path) && !detailId) || (route === 'new' && search)
+      || (route === 'detail' && (commentPage === null || [...commentParams.keys()].some(key => key !== 'comment_page')))) {
       this.boundary(); this.update({ phase: 'notFound' }); return
     }
     const page = path === '/requests' ? pageNumber(search) : 1
@@ -122,12 +127,12 @@ export class Session {
       this.boundary(); this.update({ phase: 'notFound', notice: 'ページ番号が正しくありません。' }); return
     }
     this.path = path + search
-    await this.check(page, route, detailId)
+    await this.check(page, route, detailId, commentPage ?? 1)
   }
-  async check(page = this.state.page, route = this.state.route, requestId = this.state.requestId) {
+  async check(page = this.state.page, route = this.state.route, requestId = this.state.requestId, commentPage = this.state.commentPage) {
     if (this.mutation) return
     const id = this.boundary()
-    this.update({ busy: true, page, route, requestId })
+    this.update({ busy: true, page, route, requestId, commentPage })
     try {
       const { data } = await this.api.me(this.read.signal)
       if (id !== this.generation) return
@@ -368,6 +373,8 @@ export class Session {
     if (!this.state.detail || this.state.phase !== 'authenticated' || (this.mutation && !internal) || !Number.isInteger(page) || page < 1 || page > 2147483647) return
     const id = this.generation, sequence = ++this.commentGeneration
     this.commentRead.abort(); this.commentRead = new AbortController()
+    this.path = `/requests/${this.state.requestId}${page === 1 ? '' : `?comment_page=${page}`}`
+    this.navigate(this.path, true)
     this.update({ comments: null, commentPage: page, loadingComments: true, commentReadError: '' })
     try {
       const comments = await this.api.comments(this.state.requestId, page, this.commentRead.signal)

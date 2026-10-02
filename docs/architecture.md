@@ -1,5 +1,7 @@
 # AWS 基本設計案
 
+2026-10-01追加：Nginx + React成果物 / PHP-FPMの本番用2イメージと、実PostgreSQLを使う隔離ローカルHTTPS検証を実装しました。[構成・採用版・検査・Windows手順](production.md)を参照してください。以下のAWS配置は引き続き提案・未検証です。ローカルで確認したSecure Cookieやread-only起動を、CloudFront/ALB/ECSの確認済みと読み替えません。
+
 ## 決定事項と提案の境界
 
 ユーザー決定：題材は社内IT依頼・改善管理サービス。React + TypeScript + Vite、Laravel、PostgreSQL、Docker、ECS、Terraform、GitHub Actionsを使用します。AWS月額予算は3,000円、構築から撤去まで月60時間程度、公開は事前案内期間のみ。独自ドメインは所有していません。シフトレフト、必要最小限のベースイメージ、非root実行、マルチステージビルドを重視します。
@@ -39,7 +41,7 @@ flowchart TD
 
 CloudFront → ALB → タスクは private IP の経路です。ECS の public IPv4 はイメージ取得・秘密情報注入・ログ送信などの外向き接続用で、外部からの直接受信は許可しません。ALB のターゲットは `ip`、ECS は `awsvpc` とします。同一タスクの Nginx と PHP-FPM は localhost で通信します。[ECS の外向き通信仕様](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/networking-outbound.html)を前提に、`assign_public_ip=true` と IGW への経路を両方用意します。
 
-Nginx が Vite の成果物を配信し、`/api/*`、`/login`、`/logout`、`/sanctum/csrf-cookie` は Laravel へ渡す案です。SPA の画面パスだけを index.html にフォールバックし、API の 401 / 403 / 404 / 419 / 422 を HTML の成功応答に変換しません。React に AWS 資格情報・DB 情報を埋め込みません。`VITE_*` は利用者へ配信される設定として扱います。
+NginxがViteの成果物を配信し、**GET `/login`はSPA、POST `/login`はLaravel**へ渡します。`/api/*`、`/logout`、`/sanctum/csrf-cookie`もLaravelの固定public/index.phpへ渡し、APIの401 / 403 / 404 / 419 / 422をHTMLの成功応答に変換しません。この振分けは本番用イメージでローカル検証済みです。ComposeのFPM先は`php:9000`、ECS同一taskでは`127.0.0.1:9000`へ変更する必要があります。ReactにAWS資格情報・DB情報を埋め込みません。`VITE_*`は利用者へ配信される設定として扱います。
 
 ## サブネット・配置
 
@@ -137,7 +139,7 @@ Terraform plan、apply、ECR push / ECS deploy、データ操作は権限を分�
 | Terraform | fmt、validate、Provider lock、IaC 検査、plan で public DB・過剰 SG・権限・暗号化・destroy 対象を確認。予算見積もりも再計算 |
 | 公開前 | HTTPS、Cookie / CSRF / 非キャッシュ、ALB / ECS / DB 直アクセス拒否、復元、公開終了時の閉鎖を検証 |
 
-ローカルのusers検証にはPHPUnit13とComposer auditを採用しました（[採用版・検証記録](development.md)）。イメージ・IaC検査ツール（例：Trivy等）と停止基準は未選定です。検査エラー・未実施・検出を握りつぶさず、critical / highの扱いや期限付きの誤検知除外を導入前に決めます。既存のActions初回push成功は利用者確認済みであり、追加したusers workflowのGitHub実行成功を意味しません。RDSを含むAWS配置は未構築です。
+ローカルにはPHPUnit13、Composer audit、npm auditを採用済みです。2026-10-01にTrivy0.74.0で最終配布イメージのOS/本番言語依存を検査し、CycloneDX SBOMを生成する工程を追加しました。Critical/Highは未修正も含め失敗、検査不能も失敗、他重大度も記録します。例外は追加していません。[対象範囲・証跡・限界](production.md)を参照してください。IaC検査ツール・AWSでの検証は未実施です。Actions初回push成功は利用者確認済みですが、追加workflowのGitHub実行成功や必須チェック設定を意味しません。
 
 ## 常設と期間限定の分離・公開運用（提案）
 
