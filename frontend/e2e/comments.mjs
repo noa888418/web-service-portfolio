@@ -70,7 +70,10 @@ export async function verifyComments(browser, accounts, step) {
     await post(a.page, '末尾に表示する架空コメント')
     await a.page.waitForFunction(() => document.querySelectorAll('.comment-list li').length === 2)
     assert.equal(await a.page.locator('.comment-body').last().textContent(), '末尾に表示する架空コメント')
-    await a.page.reload(); await a.page.waitForFunction(() => document.querySelectorAll('.comment-list li').length === 20)
+    step('comments direct reload preserves explicit comment_page and last-page rows')
+    assert.equal(new URL(a.page.url()).searchParams.get('comment_page'), '2')
+    await a.page.reload(); await a.page.waitForFunction(() => document.querySelectorAll('.comment-list li').length === 2)
+    assert.equal(await a.page.locator('.comment-body').last().textContent(), '末尾に表示する架空コメント')
     await a.page.setViewportSize({ width: 390, height: 844 })
     assert(await a.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
 

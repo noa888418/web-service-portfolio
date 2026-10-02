@@ -121,6 +121,8 @@ try {
 
 失敗の切り分けは`docker compose -f compose.production-test.yaml ps`と同composeの`logs --tail 30 nginx php`を、各終了コードを確認して実行します。`docker inspect`全体や展開済み`compose config`は秘密値を表示するので共有しません。APIの未ログイン401は起動失敗ではありません。以前の原因未特定のHTTP疎通失敗が解消済みという主張はせず、今回の経路・日時の成功として記録します。
 
+従来Vite/HTTPの回帰中に、再読み込み後のme401から画面待機がタイムアウトする試行もありました。試験のログイン画面再読込・利用者切替は、表示された見出し/通知だけでなくCSRF準備完了を同期点にしました。失敗時にはpath（queryなし）・method・statusだけを記録し、Cookie/本文/資格情報を出しません。匿名session要求が重なる可能性を試験側で除きましたが、過去の疎通失敗との同一原因は未確定です。同期前の任意の急な操作順すべてを検証済みとはしません。
+
 ## イメージ検査と証跡
 
 配布対象は`it-requests-php:production`と`it-requests-nginx:production`。検証ツール用imageを配布対象の代わりに検査しません。実行したimage IDからdocker saveし、Trivyはそのarchiveを読みます。Docker socketを検査コンテナへ渡しません。
@@ -145,8 +147,9 @@ try {
 | 実行設定 | production/debug=false、Secure/HttpOnly/SameSite、read-only書込拒否、非root、DB/FPM非公開、秘密値ログ不在。成功 |
 | 既存PHP回帰 | **270テスト・3,855アサーション、終了コード0**。従来のPHP8.4.25 + 実PG。既存並行処理・ガードを維持 |
 | フロント | **136モックテスト**（既存129 + URL関連7）、型/lint/build/audit成功。依存監査0件 |
-| 従来の隔離ブラウザー | 従来HTTP経路のログイン・登録・担当/状態・コメント・順序制御409の回帰成功。今回の本番通し試験と別の記録 |
+| 従来の隔離ブラウザー | 最終再実行は全項目成功・終了コード0。従来HTTP経路のログイン・登録・担当/状態・コメント・順序制御409の回帰。再読込の旧期待値は、comment_page契約に合わせURL・末尾ページの2件保持を検証。CSRF準備の同期補強と途中失敗は上記に記録。本番通し試験とは別 |
 | 最終image検査 | PHP/NginxともCritical/High/Medium/Low/Unknown検出0。OSと本番言語依存を確認しSBOM生成。初回のWindows文字コードによるreport読取り失敗を修正して再検査 |
 | データ保全 | 開発業務4表の内容を作業前後のfingerprintで比較。初期化・再投入・volume削除なし |
+| 文書・秘密情報 | ローカル参照リンク、作業ツリー/ステージ済み両方のgit diff --check、LF指定、PowerShell構文、Gitleaks files/staged成功。資格情報・秘密鍵・image archiveはGit除外 |
 
 公開前には(1) CloudFront/ALBの転送・cache/実IP/HTTPS判定とRDS TLS verify-full、(2) ECSのread-only書込volume・UID・healthcheck・worker停止/DB rollback・負荷とtimeout、(3) GitHub上の対象commit/URL/結果、必須チェック、公開資格情報・監視/保存期限・OIDC/IaCを確認します。今回のローカルHTTPS成功をAWS経路の検証済みとは扱いません。順番を制御した画面通し試験と、既存バックエンド並行HTTP/DB試験も区別します。

@@ -10,12 +10,27 @@ const local = process.env.BROWSER_DEMO === '1'
 const path = local ? '/run/local-demo/credentials.json' : '/run/browser/credentials.json'
 let step = 'startup'
 let browser
+const responses = []
 try {
   const { accounts } = JSON.parse(await readFile(path, 'utf8'))
   browser = await chromium.launch({ headless: true })
   const context = await browser.newContext({ baseURL: 'http://127.0.0.1:5173', locale: 'ja-JP' })
   const page = await context.newPage()
+  page.on('response', response => {
+    const path = new URL(response.url()).pathname
+    if (/^\/(api\/|login$|logout$|sanctum\/)/.test(path)) {
+      responses.push({ method: response.request().method(), path, status: response.status() })
+      if (responses.length > 12) responses.shift()
+    }
+  })
   page.setDefaultTimeout(10000)
+  async function loginReady() {
+    await page.getByRole('heading', { name: 'ログイン', exact: true }).waitFor()
+    await page.waitForFunction(() => {
+      const button = document.querySelector('form button')
+      return !!button && !button.disabled
+    })
+  }
   let dialogs = 0
   page.on('dialog', async dialog => { dialogs++; await dialog.dismiss() })
   const titles = {}
@@ -24,10 +39,11 @@ try {
   const createdBody = '<script>window.__bodyXss=1</script>\n<img src=x onerror="window.__bodyXss=1">\n架空の内容・次行'
   for (const key of ['employee_a', 'employee_b', 'it_x', 'it_y']) {
     step = key + ' direct /login and reload'
-    await page.goto('/login'); await page.reload()
-    await page.getByRole('heading', { name: 'ログイン', exact: true }).waitFor()
-    await page.getByRole('button', { name: 'ログイン', exact: true }).waitFor({ state: 'visible' })
-    await page.waitForFunction(() => !document.querySelector('form button')?.disabled)
+    // Complete CSRF preparation before reloading or switching actor. The notice
+    // appears before that GET finishes; overlapping anonymous session requests
+    // from the test client must not race with the next browser login.
+    await page.goto('/login'); await loginReady()
+    await page.reload(); await loginReady()
     step = key + ' login'
     await page.getByLabel(/メールアドレス/).fill(accounts[key].email)
     await page.getByLabel(/^パスワード/).fill(accounts[key].password)
@@ -132,6 +148,7 @@ try {
       await page.goto('/requests/9223372036854775807')
       await page.getByText('対象が見つかりません。', { exact: true }).waitFor()
       assert.equal(await page.locator('.request-body').count(), 0)
+      step = key + ' return to list after nonexistent detail'
       await page.getByRole('link', { name: '一覧へ戻る' }).click(); await page.waitForSelector('tbody tr')
     }
     step = key + ' narrow layout and logout'
@@ -140,10 +157,11 @@ try {
     assert.equal(await page.evaluate(() => localStorage.length + sessionStorage.length), 0)
     await page.getByRole('button', { name: 'ログアウト', exact: true }).click()
     await page.getByText('ログアウトしました。', { exact: true }).waitFor()
+    await loginReady()
     assert.equal(await page.locator('tbody tr').count(), 0)
     const me = await context.request.get('/api/me')
     assert.equal(me.status(), 401)
-    await page.goto('/requests'); await page.getByRole('heading', { name: 'ログイン', exact: true }).waitFor()
+    await page.goto('/requests'); await loginReady()
     await page.setViewportSize({ width: 1280, height: 900 })
   }
   if (!local) await verifyWorkflow(browser, accounts, createdPath, value => { step = value })
@@ -152,6 +170,7 @@ try {
     : 'PASS: isolated real Chromium/Laravel/PostgreSQL; auth/create/read/workflow retained; comments A/IT post/read, B 404, 0/20/21/22 paging, literal markup, parent unchanged, completion retains comments, stale draft 409 without replay. Ordered UI conflicts, not simultaneous send.')
 } catch (error) {
   console.error(`FAIL: browser step ${step}; ${error.name}; sensitive details omitted.`)
+  console.error('Recent HTTP statuses (no query, headers or body): ' + JSON.stringify(responses))
   process.exitCode = 1
 } finally {
   await browser?.close()

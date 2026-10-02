@@ -1,0 +1,85 @@
+{
+  "baseline_commit": "4da63475347e301d5cf4b99914ead81ab7fd2645",
+  "working_tree": "uncommitted changes; not a GitHub CI result",
+  "integration": {
+    "verified_utc": "2026-10-01T06:07:45.976328+00:00",
+    "result": "passed",
+    "runtime_images": {
+      "php": "sha256:247c40b667d68a8aaf863be6678bc4103ea375e8c6a73ac11dd72d155db5ef45",
+      "nginx": "sha256:4f7db8dd860db43f741f8808b4dacc9a3f1cd3ae76584adb3ab7abefd3e1b56c"
+    },
+    "entrypoint": "https://localhost:8443",
+    "scope": "trusted isolated Chromium; production FPM; same-request create/assign/start/comments/complete; A/B isolation; Cookie/CSRF/logout; read-only/non-root/private ports",
+    "aws_verified": false
+  },
+  "images": [
+    {
+      "image": "it-requests-php:production",
+      "image_id": "sha256:247c40b667d68a8aaf863be6678bc4103ea375e8c6a73ac11dd72d155db5ef45",
+      "repo_digests": [
+        "it-requests-php@sha256:247c40b667d68a8aaf863be6678bc4103ea375e8c6a73ac11dd72d155db5ef45"
+      ],
+      "scan_utc": "2026-10-01T06:07:19.527910+00:00",
+      "trivy": "aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+      "policy": "HIGH/CRITICAL or scanner error fails; no ignore-unfixed",
+      "platform": "linux/amd64",
+      "layer_runtime_secret_and_forbidden_file_check": "passed",
+      "inventory_components": 118,
+      "sbom": "php-sbom.cdx.json",
+      "sbom_sha256": "facb3cfbe0c3367a0cd6248f0e8e7d8bbc1685c09f210d272bcd19c640a4d800",
+      "scanned_types": [
+        "alpine",
+        "composer-vendor"
+      ],
+      "severity_counts": {
+        "UNKNOWN": 0,
+        "LOW": 0,
+        "MEDIUM": 0,
+        "HIGH": 0,
+        "CRITICAL": 0
+      },
+      "vulnerability_database": {
+        "Version": 2,
+        "NextUpdate": "2026-10-02T01:24:14.992990943Z",
+        "UpdatedAt": "2026-10-01T01:24:14.992991033Z",
+        "DownloadedAt": "2026-10-01T06:01:29.709200298Z"
+      },
+      "vulnerability_report": "php-vulnerabilities.json",
+      "result": "passed"
+    },
+    {
+      "image": "it-requests-nginx:production",
+      "image_id": "sha256:4f7db8dd860db43f741f8808b4dacc9a3f1cd3ae76584adb3ab7abefd3e1b56c",
+      "repo_digests": [
+        "it-requests-nginx@sha256:4f7db8dd860db43f741f8808b4dacc9a3f1cd3ae76584adb3ab7abefd3e1b56c"
+      ],
+      "scan_utc": "2026-10-01T06:07:44.439684+00:00",
+      "trivy": "aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+      "policy": "HIGH/CRITICAL or scanner error fails; no ignore-unfixed",
+      "platform": "linux/amd64",
+      "layer_runtime_secret_and_forbidden_file_check": "passed",
+      "inventory_components": 26,
+      "sbom": "nginx-sbom.cdx.json",
+      "sbom_sha256": "d845bd68ba0e50ca2cb66ad28b8d4f2927227cd98906b0c0ef5aefa1f7a96d8e",
+      "scanned_types": [
+        "alpine",
+        "node-pkg"
+      ],
+      "severity_counts": {
+        "UNKNOWN": 0,
+        "LOW": 0,
+        "MEDIUM": 0,
+        "HIGH": 0,
+        "CRITICAL": 0
+      },
+      "vulnerability_database": {
+        "Version": 2,
+        "NextUpdate": "2026-10-02T01:24:14.992990943Z",
+        "UpdatedAt": "2026-10-01T01:24:14.992991033Z",
+        "DownloadedAt": "2026-10-01T06:01:29.709200298Z"
+      },
+      "vulnerability_report": "nginx-vulnerabilities.json",
+      "result": "passed"
+    }
+  ]
+}
