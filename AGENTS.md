@@ -55,3 +55,10 @@
 3. 残る課題、未決定事項、必要な次の作業。
 
 秘密情報を除いた検証証跡を残し、失敗や制約も説明可能な状態にしてください。
+
+## Terraform初期基盤（2026-10-03）
+
+- bootstrapのstate S3/専用KMS、foundationのprivate ECR2個のみ実装。edge/runtimeの空rootを検査成功として数えません。手順と移行差分はdocs/terraform.mdを参照します。
+- Terraform1.16.5 / AWS Provider6.67.0をconfig・制約・両root lockで固定。静的検査はAWS資格情報と実backendを使わず、Trivy0.74.0のHIGH/CRITICAL・評価不能で失敗します。LOW/MEDIUMは証跡に残します。
+- state・plan・実入力をGit/公開artifactに入れず、stateの鍵と旧versionをruntime撤去に混ぜません。ECRの稼働/rollback digestを自動expireしません。
+- 今回の成功をAWSの実plan/apply/権限/復元、Fargate volume、RDS TLS、公開seed、GitHub成功とは扱いません。AWS操作とpushは別の明示された工程です。

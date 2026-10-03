@@ -1,0 +1,10 @@
+# Future migration: replace only the local backend block in versions.tf with this.
+# Supply bucket, kms_key_id and allowed_account_ids in a private *.s3.tfbackend file.
+terraform {
+  backend "s3" {
+    region       = "ap-northeast-1"
+    key          = "bootstrap/terraform.tfstate"
+    encrypt      = true
+    use_lockfile = true
+  }
+}

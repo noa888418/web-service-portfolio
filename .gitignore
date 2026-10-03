@@ -53,3 +53,13 @@ gitleaks-report.*
 /frontend/dist/
 /frontend/test-results/
 /frontend/playwright-report/
+
+# Private backend inputs and exported plan/state diagnostics.
+*.tfbackend
+*.tfbackend.*
+!*.tfbackend.example
+.terraform.tfstate.lock.info
+plan.json
+*.plan.json
+state.json
+*.state.json

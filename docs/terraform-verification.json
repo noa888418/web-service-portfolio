@@ -1,0 +1,73 @@
+{
+  "verified_utc": "2026-10-03T06:00:50.984208+00:00",
+  "terraform": "1.16.5",
+  "aws_provider": "6.67.0",
+  "trivy": "aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+  "aws_connected": false,
+  "roots": {
+    "bootstrap": {
+      "severity_counts": {
+        "UNKNOWN": 0,
+        "LOW": 1,
+        "MEDIUM": 0,
+        "HIGH": 0,
+        "CRITICAL": 0
+      },
+      "result": "passed"
+    },
+    "foundation": {
+      "severity_counts": {
+        "UNKNOWN": 0,
+        "LOW": 2,
+        "MEDIUM": 0,
+        "HIGH": 0,
+        "CRITICAL": 0
+      },
+      "result": "passed"
+    }
+  },
+  "result": "passed",
+  "mock_test_runs": 8,
+  "gate_unit_tests": 4,
+  "powershell_wrapper": "scripts/test_terraform.ps1; exit code 0",
+  "secret_scan": "Gitleaks files passed",
+  "documentation_links": "passed",
+  "diff_check": "working tree and staged passed",
+  "remaining_findings": [
+    {
+      "root": "bootstrap",
+      "id": "AWS-0089",
+      "severity": "LOW",
+      "title": "S3 Bucket Logging"
+    },
+    {
+      "root": "foundation",
+      "id": "AWS-0033",
+      "severity": "LOW",
+      "title": "ECR Repository should use customer managed keys to allow more control"
+    },
+    {
+      "root": "foundation",
+      "id": "AWS-0033",
+      "severity": "LOW",
+      "title": "ECR Repository should use customer managed keys to allow more control"
+    }
+  ],
+  "source_sha256": {
+    "infra/bootstrap/.terraform.lock.hcl": "338f49b0c77b2f6ee7a0061e1148a70089e9925f46997071d59bf070a3df05bf",
+    "infra/bootstrap/backend.s3.tf.example": "075dac5a7c5531a051d1f4e533742bc66d70ef2f5ba4115b5431e68da317b9ac",
+    "infra/bootstrap/encryption.tf": "fe021e21f3d2fb9d43835f601d44adc3441b767b75c64b9e1ef464363f588a66",
+    "infra/bootstrap/main.tf": "2e9f9bd4e2a1549492d0735f7cd562f350be1a5582bd50df897543fcc05cebb8",
+    "infra/bootstrap/outputs.tf": "ae0ff3dac1e80ef7e7f91126e2e066de7a487f838bd03653732c16bfefaa0ed8",
+    "infra/bootstrap/tests/safety.tftest.hcl": "ad08dc113dc580a77a1c970a60f27752ea49f7ec67103136c3044173a77d9f9d",
+    "infra/bootstrap/variables.tf": "6d00aa0a82dec1ef22a9e5e033fe13d173e23d3f13196651d134db09d07027ae",
+    "infra/bootstrap/versions.tf": "fe90e7212893b8b202f6d717e466f054dcc54c09b1f21cd499a5133e45a37e51",
+    "infra/foundation/.terraform.lock.hcl": "338f49b0c77b2f6ee7a0061e1148a70089e9925f46997071d59bf070a3df05bf",
+    "infra/foundation/main.tf": "328b418d775db4718e08ca4585a4bf4d0654c55327d4d1a1050098ca317f4757",
+    "infra/foundation/outputs.tf": "0a356319e3440020d27eb52f7321839be80a8da1c4a4991f8ca1afb7aa8e2083",
+    "infra/foundation/tests/safety.tftest.hcl": "0b9a2aebb1211480a29799731feafbd0313783c2413e20ca92eaca893501e86d",
+    "infra/foundation/variables.tf": "d3135befbcf53cefc477d0d7fbafa3d980cdf7ec722fb5362d00e06d675492a7",
+    "infra/foundation/versions.tf": "dac43eddcd7c794fc52969a3d5b460460244499bae8fc1e87edc353fe7bfbb2c"
+  },
+  "scope": "Static configuration and mocked plans only. No AWS account, real plan, apply, destroy or application/DB tests."
+}

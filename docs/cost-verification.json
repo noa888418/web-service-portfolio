@@ -1,0 +1,205 @@
+{
+  "checked_on": "2026-10-03",
+  "region": "ap-northeast-1",
+  "aws_account_accessed": false,
+  "free_tier_credits_deducted": false,
+  "prices": [
+    {
+      "service": "AmazonECS",
+      "sku": "KBQ3Q6DY9J327G8N",
+      "usage_type": "APN1-Fargate-vCPU-Hours:perCPU",
+      "usd_per_unit": "0.0505600000",
+      "unit": "hours",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonECS/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-11T12:44:25Z"
+    },
+    {
+      "service": "AmazonECS",
+      "sku": "JQEE6EF5FAF2AESH",
+      "usage_type": "APN1-Fargate-GB-Hours",
+      "usd_per_unit": "0.0055300000",
+      "unit": "hours",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonECS/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-11T12:44:25Z"
+    },
+    {
+      "service": "AWSELB",
+      "sku": "98ZU8QNDMR4AS8FJ",
+      "usage_type": "APN1-LoadBalancerUsage",
+      "usd_per_unit": "0.0243000000",
+      "unit": "Hrs",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSELB/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-11T12:45:44Z"
+    },
+    {
+      "service": "AWSELB",
+      "sku": "F2UQT6CZGM7BTWS8",
+      "usage_type": "APN1-LCUUsage",
+      "usd_per_unit": "0.0080000000",
+      "unit": "LCU-Hrs",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSELB/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-11T12:45:44Z"
+    },
+    {
+      "service": "AmazonRDS",
+      "sku": "YXENKSJFV9BXQF4N",
+      "usage_type": "APN1-InstanceUsage:db.t4g.micro",
+      "usd_per_unit": "0.0250000000",
+      "unit": "Hrs",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/ap-northeast-1/index.json",
+      "publication_date": "2026-10-01T06:02:30Z"
+    },
+    {
+      "service": "AmazonRDS",
+      "sku": "YM9AR73XYRPUSCN3",
+      "usage_type": "APN1-RDS:GP3-Storage",
+      "usd_per_unit": "0.1380000000",
+      "unit": "GB-Mo",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/ap-northeast-1/index.json",
+      "publication_date": "2026-10-01T06:02:30Z"
+    },
+    {
+      "service": "AmazonRDS",
+      "sku": "8EP35HPTSYF38J3V",
+      "usage_type": "APN1-RDS:ChargedBackupUsage",
+      "usd_per_unit": "0.0950000000",
+      "unit": "GB-Mo",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/ap-northeast-1/index.json",
+      "publication_date": "2026-10-01T06:02:30Z"
+    },
+    {
+      "service": "AmazonVPC",
+      "sku": "ZP85FQT9FHKJRAG5",
+      "usage_type": "APN1-PublicIPv4:InUseAddress",
+      "usd_per_unit": "0.0050000000",
+      "unit": "Hrs",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonVPC/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-17T19:05:28Z"
+    },
+    {
+      "service": "AmazonCloudFront",
+      "sku": "3R2FUPWJ2VYY9GAN",
+      "usage_type": "JP-DataTransfer-Out-OBytes",
+      "usd_per_unit": "0.0600000000",
+      "unit": "GB",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudFront/current/index.json",
+      "publication_date": "2026-10-03T00:04:26Z"
+    },
+    {
+      "service": "AmazonCloudFront",
+      "sku": "CME9BRJSS2F5PBYE",
+      "usage_type": "JP-DataTransfer-Out-Bytes",
+      "usd_per_unit": "0.1140000000",
+      "unit": "GB",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudFront/current/index.json",
+      "publication_date": "2026-10-03T00:04:26Z"
+    },
+    {
+      "service": "AmazonCloudFront",
+      "sku": "EJZT492VM8J2VQTQ",
+      "usage_type": "JP-Requests-Tier2-HTTPS",
+      "usd_per_unit": "0.0000012000",
+      "unit": "Requests",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudFront/current/index.json",
+      "publication_date": "2026-10-03T00:04:26Z"
+    },
+    {
+      "service": "AWSSecretsManager",
+      "sku": "JC68V52M47AA94EZ",
+      "usage_type": "APN1-AWSSecretsManagerAPIRequest",
+      "usd_per_unit": "0.0000050000",
+      "unit": "API Requests",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSSecretsManager/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-11T12:46:10Z"
+    },
+    {
+      "service": "AWSSecretsManager",
+      "sku": "GVA2ZKT9KD5RYX6P",
+      "usage_type": "APN1-AWSSecretsManager-Secrets",
+      "usd_per_unit": "0.4000000000",
+      "unit": "Secrets",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSSecretsManager/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-11T12:46:10Z"
+    },
+    {
+      "service": "AmazonCloudWatch",
+      "sku": "FBMB6TVC844YGZ3J",
+      "usage_type": "APN1-CW:AlarmMonitorUsage",
+      "usd_per_unit": "0.1000000000",
+      "unit": "Alarms",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudWatch/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-22T02:17:15Z"
+    },
+    {
+      "service": "AmazonCloudWatch",
+      "sku": "CWB2GTZJXNX3TA6H",
+      "usage_type": "APN1-DataProcessing-Bytes",
+      "usd_per_unit": "0.7600000000",
+      "unit": "GB",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudWatch/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-22T02:17:15Z"
+    },
+    {
+      "service": "AmazonCloudWatch",
+      "sku": "42CVQU4BPES8AWHC",
+      "usage_type": "APN1-TimedStorage-ByteHrs",
+      "usd_per_unit": "0.0330000000",
+      "unit": "GB-Mo",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudWatch/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-22T02:17:15Z"
+    },
+    {
+      "service": "AmazonS3",
+      "sku": "XAKHUSC46NWC9PPM",
+      "usage_type": "APN1-Requests-Tier1",
+      "usd_per_unit": "0.0000047000",
+      "unit": "Requests",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-28T23:04:16Z"
+    },
+    {
+      "service": "AmazonS3",
+      "sku": "CCBFTMENTDWZHXHX",
+      "usage_type": "APN1-TimedStorage-ByteHrs",
+      "usd_per_unit": "0.0250000000",
+      "unit": "GB-Mo",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-28T23:04:16Z"
+    },
+    {
+      "service": "AmazonS3",
+      "sku": "9C7873KU3ZQBD6BJ",
+      "usage_type": "APN1-Requests-Tier2",
+      "usd_per_unit": "0.0000003700",
+      "unit": "Requests",
+      "source": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/ap-northeast-1/index.json",
+      "publication_date": "2026-09-28T23:04:16Z"
+    }
+  ],
+  "page_prices": [
+    {
+      "service": "ECR",
+      "usd_per_gb_month": 0.1,
+      "source": "https://aws.amazon.com/ecr/pricing/"
+    },
+    {
+      "service": "ECR basic scan",
+      "usd": 0,
+      "source": "https://aws.amazon.com/about-aws/whats-new/2024/08/new-version-amazon-ecr-basic-scanning/"
+    },
+    {
+      "service": "KMS",
+      "usd_per_key_month_before_rotation": 1,
+      "usd_per_10000_symmetric_requests": 0.03,
+      "source": "https://aws.amazon.com/kms/pricing/"
+    }
+  ],
+  "estimate": {
+    "usd": 13.13638932,
+    "jpy_per_usd_assumption": 160,
+    "tax_assumption": 0.1,
+    "jpy_including_tax": 2312.0,
+    "budget_jpy": 3000,
+    "reserve_jpy": 688.0
+  }
+}

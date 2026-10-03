@@ -1,0 +1,10 @@
+{
+  "terraform_version": "1.16.5",
+  "aws_provider_version": "6.67.0",
+  "terraform_sha256": {
+    "windows_amd64": "01700102b7291f95c0ab61394b55bfd5f57a12ac65632c2c1958691c8cf438ef",
+    "linux_amd64": "2bc2fcfff033265c9e02ca0351f01794eb122f62a9b2a49a3294b9e49eaab5e4"
+  },
+  "trivy_image": "aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+  "roots": ["bootstrap", "foundation"]
+}

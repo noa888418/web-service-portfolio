@@ -2,13 +2,13 @@
 
 ## 結論と見積もりの位置付け
 
-**月額予算 3,000 円はユーザー決定です。** [基本設計案](architecture.md)を下記の規模・時間で運用し、期間外に ALB・ECS・RDS を撤去する場合、月 **12.1244 USD ≒ 2,134 円（税込）** を見込みます。1 USD = 160 円の仮定で、予備費は **約 866 円（予算の約 29%）** です。料金上限や実測値ではなく、使用量に依存する見積もりです。
+**月額予算 3,000 円はユーザー決定です。** [基本設計案](architecture.md)を下記の規模・時間で運用し、期間外に ALB・ECS・RDS を撤去する場合、月 **13.1364 USD ≒ 2,312 円（税込）** を見込みます。1 USD = 160 円の仮定で、予備費は **約 688 円（予算の約 23%）** です。料金上限や実測値ではなく、使用量に依存する見積もりです。
 
-公式料金・課金条件の確認日：**2026-09-21**。東京リージョン（ap-northeast-1）、CloudFront は日本のエッジ料金、On-Demand / 従量課金を参照しました。無料枠、CloudFront の無料配信量・無料リクエスト、RDS の無料 backup 割当、クレジット、Savings Plans、Spot の割引を差し引いていません。標準で追加料金のない通信・機能は無料枠と区別します。
+公式料金・課金条件の確認日：**2026-10-03**。東京リージョン（ap-northeast-1）、CloudFront は日本のエッジ料金、On-Demand / 従量課金を参照しました。無料枠、CloudFront の無料配信量・無料リクエスト、RDS の無料 backup 割当、クレジット、Savings Plans、Spot の割引を差し引いていません。標準で追加料金のない通信・機能は無料枠と区別します。
 
 ## 計算条件（提案）
 
-- 2026-09-22 の設計前提：**構築・検証6時間、公開48時間、閉鎖・保存・撤去等6時間の合計60時間**。初月は検証に応じ公開を短縮します。待機・失敗・再試行も時間に含め、60時間を超える場合は公開を短縮または再見積もりします。単価は上記2026-09-21の確認結果を使用しています。
+- 2026-09-22 の設計前提：**構築・検証6時間、公開48時間、閉鎖・保存・撤去等6時間の合計60時間**。初月は検証に応じ公開を短縮します。待機・失敗・再試行も時間に含め、60時間を超える場合は公開を短縮または再見積もりします。単価は2026-10-03に公開料金表と再照合しました。主要単価の変更はありません。
 - ALB 1 台、RDS PostgreSQL db.t4g.micro Single-AZ 1 台、gp3 20 GiB を各 60 時間。標準サポート期間内の PostgreSQL を選ぶ前提で Extended Support 料金は含めません。RDS の実データ量ではなく割当 storage を課金します。
 - ECS Fargate Linux x86_64、**1 task 合計 0.5 vCPU / 1 GiB** に Nginx と Laravel の 2 container。60 task-hour に rolling deploy の重複・migration・seed・復元検証等の追加 4 task-hour を加え、計 64 task-hour。性能検証で不足すればサイズと費用を見直します。
 - public IPv4 は通常タスク 1 個につき 1 個、計 64 address-hour。内部 ALB・非公開 RDS・CloudFront VPC origin の private ENI に public IPv4 料金を足しません。Elastic IP の固定保持はしません。
@@ -28,17 +28,21 @@ AWS の料金ページは地域選択が動的なため、東京の数値は AWS
 | --- | --- | --- |
 | P1 | [Fargate 料金](https://aws.amazon.com/fargate/pricing/)、[東京 AmazonECS JSON](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonECS/current/ap-northeast-1/index.json)（公開 2026-09-11） | x86 vCPU $0.05056/h（SKU KBQ3Q6DY9J327G8N）、memory $0.00553/GB-h（JQEE6EF5FAF2AESH）。イメージ取得開始から課金、Linux 最小 1 分 |
 | P2 | [ALB 料金](https://aws.amazon.com/elasticloadbalancing/pricing/)、[東京 AWSELB JSON](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSELB/current/ap-northeast-1/index.json)（公開 2026-09-11） | Application / AWS Region：$0.0243/h（98ZU8QNDMR4AS8FJ）、$0.008/LCU-h（F2UQT6CZGM7BTWS8） |
-| P3 | [RDS PostgreSQL 料金](https://aws.amazon.com/rds/postgresql/pricing/)、[東京 AmazonRDS JSON](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/ap-northeast-1/index.json)（公開 2026-09-17） | db.t4g.micro Single-AZ $0.025/h（YXENKSJFV9BXQF4N）、gp3 $0.138/GB-month（YM9AR73XYRPUSCN3）、backup $0.095/GB-month（8EP35HPTSYF38J3V） |
+| P3 | [RDS PostgreSQL 料金](https://aws.amazon.com/rds/postgresql/pricing/)、[東京 AmazonRDS JSON](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/ap-northeast-1/index.json)（公開 2026-10-01） | db.t4g.micro Single-AZ $0.025/h（YXENKSJFV9BXQF4N）、gp3 $0.138/GB-month（YM9AR73XYRPUSCN3）、backup $0.095/GB-month（8EP35HPTSYF38J3V） |
 | P4 | [VPC 料金](https://aws.amazon.com/vpc/pricing/)、[東京 AmazonVPC JSON](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonVPC/current/ap-northeast-1/index.json)（公開 2026-09-17） | InUse / Idle public IPv4 とも $0.005/address-h。InUse SKU ZP85FQT9FHKJRAG5 |
-| P5 | [CloudFront 従量課金](https://aws.amazon.com/cloudfront/pricing/pay-as-you-go/)、[AmazonCloudFront JSON](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudFront/current/index.json)（公開 2026-09-16） | 日本の最初の従量帯：配信 $0.114/GB、HTTPS $0.012/10,000 requests、origin 向け $0.060/GB。JP-DataTransfer-Out-Bytes、JP-Requests-Tier2-HTTPS / JP-Requests-HTTPS-Proxy 等 |
+| P5 | [CloudFront 従量課金](https://aws.amazon.com/cloudfront/pricing/pay-as-you-go/)、[AmazonCloudFront JSON](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudFront/current/index.json)（公開 2026-10-03） | 日本の最初の従量帯：配信 $0.114/GB、HTTPS $0.012/10,000 requests、origin 向け $0.060/GB。JP-DataTransfer-Out-Bytes、JP-Requests-Tier2-HTTPS / JP-Requests-HTTPS-Proxy 等 |
 | P6 | [ECR 料金](https://aws.amazon.com/ecr/pricing/) | Private image storage $0.10/GB-month。同一リージョンの ECR → Fargate 転送は標準で追加料金なし |
 | P7 | [Secrets Manager 料金](https://aws.amazon.com/secrets-manager/pricing/)、[東京 AWSSecretsManager JSON](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSSecretsManager/current/ap-northeast-1/index.json)（公開 2026-09-11） | $0.40/secret-month、API $0.05/10,000 回 |
-| P8 | [CloudWatch 料金](https://aws.amazon.com/cloudwatch/pricing/)、[東京 AmazonCloudWatch JSON](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudWatch/current/ap-northeast-1/index.json)（公開 2026-09-18） | Standard logs 取込 $0.76/GB、保存 $0.033/GB-month、標準 alarm $0.10/metric-month（FBMB6TVC844YGZ3J） |
-| P9 | [S3 料金](https://aws.amazon.com/s3/pricing/)、[東京 AmazonS3 JSON](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/ap-northeast-1/index.json)（公開 2026-09-18） | Standard $0.025/GB-month、PUT / LIST $0.0047/1,000 回、GET $0.0037/10,000 回 |
+| P8 | [CloudWatch 料金](https://aws.amazon.com/cloudwatch/pricing/)、[東京 AmazonCloudWatch JSON](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonCloudWatch/current/ap-northeast-1/index.json)（公開 2026-09-22） | Standard logs 取込 $0.76/GB、保存 $0.033/GB-month、標準 alarm $0.10/metric-month（FBMB6TVC844YGZ3J） |
+| P9 | [S3 料金](https://aws.amazon.com/s3/pricing/)、[東京 AmazonS3 JSON](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/ap-northeast-1/index.json)（公開 2026-09-28） | Standard $0.025/GB-month、PUT / LIST $0.0047/1,000 回、GET $0.0037/10,000 回 |
 
 CloudFront は定額プランではなく従量課金を前提にします。定額プランに含まれる WAF / Route 53 等を、この見積もりで利用できるとみなしません。VPC origin を含む AWS origin → CloudFront の取得転送は標準料金上追加なし、CloudFront → viewer は上表どおり全量を計上します。[CloudFront の料金区分](https://aws.amazon.com/cloudfront/pricing/pay-as-you-go/)
 
-AWS 管理 KMS key は作成・保存の月額料金がありませんが、API 呼出料金は別です。無料リクエスト枠を前提にせず、下表の小口費用枠に含め、実装時に通信経路・通知方式と合わせて積算し直します。[KMS の料金条件](https://aws.amazon.com/kms/pricing/)
+AWS管理KMS keyには鍵保存の固定費はありませんが、APIは別料金です。今回stateのIaC検査AWS-0132/HIGHへの対応としてcustomer managed KMS keyを1本追加しました。月$1とAPI4,000回×$0.03/10,000=$0.012を無料枠控除なしで明示計上します。他のAWS管理鍵API等は従来の小口枠に残します。[KMS の料金条件](https://aws.amazon.com/kms/pricing/)
+
+P10：[KMS公式料金](https://aws.amazon.com/kms/pricing/)。鍵$1/month、対称鍵API $0.03/10,000回を使用。自動rotationを有効化するため、1回目・2回目のrotationで各$1/monthが追加され、以後の増加は上限ありです。初年度の見積もりはrotation前。2回後の同条件は約2,664円（税込）となり、予備費は約336円まで縮みます。長期維持時は年次再見積もりします。
+
+ECR basic scan-on-pushは[追加料金なしの標準機能](https://aws.amazon.com/about-aws/whats-new/2024/08/new-version-amazon-ecr-basic-scanning/)で、無料枠利用ではありません。今回Inspector enhancedを有効化せず、既存registryで有効なら構築前に適用範囲と[Inspector料金](https://aws.amazon.com/inspector/pricing/)を確認し再見積もりします。ECRは自動削除なしなので、2GBは保証上限ではなく作成者が保持digestと容量を照合する予算枠です。
 
 ## 月 60 時間の内訳
 
@@ -60,10 +64,11 @@ AWS 管理 KMS key は作成・保存の月額料金がありませんが、API 
 | CloudWatch Logs 取込・保存（P8） | 1 × 0.76 + 0.1 × 0.033 | 0.76330 |
 | CloudWatch alarm（P8） | 2 × 0.10、常設 1 か月で保守的に計上 | 0.20000 |
 | S3 保存・リクエスト（P9） | 1 × 0.025 + 1,000 / 1,000 × 0.0047 + 10,000 / 10,000 × 0.0037 | 0.03340 |
+| state専用KMS（P10） | 1鍵 × $1 + API 4,000 / 10,000 × $0.03 | 1.01200 |
 | その他通信・小口費用の概算枠 | AZ 間 DB 通信・復元時の転送、KMS API・通知等に 0.20 を確保。これは公式単価ではなく未確定項目の予算枠 | 0.20000 |
-| **合計** | 丸め前の値で合算 | **12.12439** |
+| **合計** | 丸め前の値で合算 | **13.13639** |
 
-**円換算：12.124389… × 160 × 1.10 = 2,133.89 円 → 約 2,134 円。** 追加余裕は 3,000 − 2,134 = 約 866 円です。その他通信・小口費用枠 $0.20 は月額に計上済みで、予備費とは別ですが、上限を保証しません。DB と task の AZ を固定できない場合や外向き API / イメージのリージョンを変える場合は、経路別の公式単価と使用量で置き換えます。
+**円換算：13.136389… × 160 × 1.10 = 2,312.00 円 → 約 2,312 円。** 追加余裕は 3,000 − 2,312 = 約 688 円です。その他通信・小口費用枠 $0.20 は月額に計上済みで、予備費とは別ですが、上限を保証しません。DB と task の AZ を固定できない場合や外向き API / イメージのリージョンを変える場合は、経路別の公式単価と使用量で置き換えます。
 
 ## 公開期間外の費用と運用比較
 
@@ -71,7 +76,7 @@ AWS 管理 KMS key は作成・保存の月額料金がありませんが、API 
 | --- | --- |
 | ALB・Fargate・RDS compute・public IPv4 | runtime の削除完了後は該当リソースの時間課金が終わる。伝播・削除待ちや残存 task も 60 時間に含める |
 | DB snapshot / backup | DB を削除しても残り、上表では月 $1.90 を計上。鍵も必要。保存世代・容量が増えると増額 |
-| ECR・secret・S3・ログ保存・alarm | 期間外も課金。上表は常設分を含む。AWS 管理 key を使う前提で customer managed KMS key の月額は含めない |
+| ECR・secret・S3・ログ保存・alarm | 期間外も課金。上表は常設分を含む。state専用customer managed KMS keyの月額も含む。鍵は過去stateを復号する間保持する |
 | CloudFront・VPC・subnet・SG・IGW・IAM | 常設案。リクエストや転送がなければ、この構成のための固定時間料金は見込まない。閉鎖反映前の応答や閉鎖用ページの提供を追加すれば別途課金を考慮 |
 
 RDS の停止だけで月全体を安く維持する案は採りません。停止中も storage / backup は課金され、連続 7 日停止後に自動起動します。[RDS 停止の仕様](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_StopInstance.html)
@@ -80,11 +85,11 @@ RDS の停止だけで月全体を安く維持する案は採りません。停�
 
 ## 予備費・超過要因
 
-- 為替が 180 円/USD なら同じ利用量でも **約 2,401 円**、予備費は約 599 円になります。決済手数料や請求時の丸めも余裕内で確認します。
+- 為替が 180 円/USD なら同じ利用量でも **約 2,601 円**、予備費は約 399 円になります。決済手数料や請求時の丸めも余裕内で確認します。
 - 同規模の ALB・task・IPv4・RDS・gp3 と 1 LCU を 1 時間延長すると約 **17.05 円**（160 円/USD・税込、通信等を除く）。合計60時間から12時間超過すれば約205円以上を加算します。初月はまず公開時間の短縮で検証時間を確保します。
 - CloudFront 配信がさらに 100 GB 増えると配信だけで約 **2,006 円**増えます。事前案内だけではアクセス増加を防げず、従量課金に支出の上限はありません。
 - task の増設・メモリ増量、再構築失敗や放置、ALB LCU の増加、RDS の CPU credit 超過（T4g PostgreSQL は $0.075/vCPU-hour）、追加 storage / snapshot、ログ大量出力、ECR の旧 image 蓄積を確認します。
-- WAF、NAT Gateway、Redis、有料 VPC Endpoint、独自ドメイン / Route 53、有料 support、customer managed KMS key、Extended Support、CloudWatch Logs Insights の検索等は初期案に含めません。追加時は先に再見積もりします。監視を無効にして予算を合わせる方針ではありません。
+- WAF、NAT Gateway、Redis、有料 VPC Endpoint、独自ドメイン / Route 53、有料 support、state専用以外のcustomer managed KMS key、Extended Support、CloudWatch Logs Insights の検索等は初期案に含めません。追加時は先に再見積もりします。監視を無効にして予算を合わせる方針ではありません。
 - GitHub Actions の有料 minutes 等は AWS 予算とは別です。AWS 料金内訳に含めていないため、GitHub 側の利用条件も CI 実装時に確認します。
 
 ## 予算通知と停止の責任
@@ -94,3 +99,11 @@ AWS Budgets で 3,000 円相当の月額予算を設定し、50%・70%・90% の
 **予算通知は支出の強制停止ではありません。** 請求反映・通知に遅延があり、通知前後に増額することがあります。公開終了・撤去・削除結果確認は作成者が担当します。通知先と各回の終了予定時刻を決め、公開前後に稼働リソースと累積時間を確認します。予算通知を受けて state や snapshot を一括削除する運用にはしません。[AWS Budgets の通知と遅延](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-managing-costs.html)
 
 本見積もりの数式はローカルで再計算していますが、AWS リソースは未作成で実測費用・性能・課金停止は未検証です。最初の短時間検証後に実績単価・量と照合し、予備費を使い切る見込みなら公開時間・構成を再検討します。
+
+## 2026-10-03のTerraform範囲との対応
+
+今回のコードで将来作成する常設分だけなら、ECR2GB=$0.20、S3の上記保存/要求枠=$0.0334、state KMS=$1.012の合計$1.2454、約219円/月（税込）の枠です。S3枠には将来のログ分も含むためbootstrap単体の実測額ではありません。まだapplyしておらず今回の作業でAWS課金資源は作成していません。
+
+全体見積もりの残りは将来のruntime/edge・secret・ログ等です。常設S3/KMS/ECRは公開が0時間でも保存/要求で課金され、削除待ち・snapshot待ち・CF伝播・image pullも60時間に含めます。枠を超えそうなら公開48時間を先に短縮し、低トラフィック/小容量を実測で確認します。3,000円を超える見込みでは公開せず再設計します。通知先は未決定で、今回Terraformから予算通知は作成しません。
+
+料金照合の抽出値・公開日時・URLは[料金確認記録](cost-verification.json)に保存します。為替160円/USD・税10%は仮定、無料枠/クレジット控除なし、backup20GB-month枠は維持、予算通知は強制停止ではないという前提に変更はありません。

@@ -1,0 +1,23 @@
+name: Terraform static checks
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  terraform:
+    name: Terraform static (no AWS)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install checksum-pinned Terraform
+        run: python3 scripts/terraform_checks.py install
+      - name: Test failure gates
+        run: python3 -m unittest discover -s scripts/tests -p test_terraform_checks.py
+      - name: Format, backend-disabled init, validate, mocked plans and IaC gate
+        run: python3 scripts/terraform_checks.py check
+      - name: Diff format
+        run: git diff --check
+      # No AWS credentials, id-token, backend access, plan artifact or deployment.
+      # Gitleaks, app tests and production image checks remain separate required reviews.

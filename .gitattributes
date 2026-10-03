@@ -7,3 +7,5 @@
 *.lock text eol=lf
 Dockerfile text eol=lf
 backend/artisan text eol=lf
+*.tf text eol=lf
+*.hcl text eol=lf

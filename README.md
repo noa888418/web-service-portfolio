@@ -6,6 +6,8 @@
 
 ## 現在の状態と今回の範囲
 
+**2026-10-03：Terraform初期基盤を追加しました。** bootstrapの保護付きstate S3/KMS、foundationのprivate ECR 2個と、AWS非接続のfmt/init/validate/mock/IaC検査が対象です。Terraform1.16.5・AWS Provider6.67.0を固定しました。2rootのvalidate・mock8件・IaC・Gitleaksがローカルで成功し、IaCのHigh/Criticalは0、Lowは3件を記録しています。[構成・Windows検査・将来のstate移行・AWS移行差分](docs/terraform.md)を参照してください。実AWS plan/apply/destroy、ECR push、GitHub新workflowの成功確認は未実施です。アプリ・開発DB・既存検証データは変更していません。以下は前工程の記録です。
+
 **本番用Nginx + React成果物 / PHP-FPMの2イメージと、隔離ローカルHTTPS検証を追加しました。** 非root・read-onlyで、社員の登録からITの担当割当・コメント・完了まで同じ依頼で成功しました。PHP270テスト・3,855アサーション、フロント136テストと型/lint/build/auditが成功。最終2イメージのTrivy検査はCritical/Highを含む全重大度0件、SBOMを生成しました。対象と検査の限界、Windows再実行手順は[本番用構成](docs/production.md)を参照してください。開発DBを保持し、AWS構築・レジストリpush・commit/pushは行っていません。GitHub CIの今回の成功は未確認です。以下は前工程の記録です。
 
 **依頼詳細にコメント一覧・投稿を追加しました。** 社員は本人の依頼、IT担当者は全依頼で閲覧し、未完了なら投稿できます。20件・古い順・JST表示、プレーンテキスト描画を維持します。201後の表示更新失敗と投稿結果不明を区別し、重複投稿を避けるため自動再送しません。完了409では投稿を止め、閲覧権を確認した下書きに明示的な破棄操作を提供します。入口は`http://127.0.0.1:5173/login`です。[起動・操作・停止・検証手順](docs/frontend.md)を参照してください。Cookie/CSRF、サーバー認可、既存の担当・状態変更を維持しています。
@@ -26,7 +28,7 @@ DB・API12件・共通4画面の [横断対応表](docs/design-review.md)があ�
 
 担当・状態更新までの**193テスト・2,707アサーション、終了コード0は利用者のWindowsでも確認済み**です。コメント工程では**236テスト・3,488アサーション、終了コード0**を確認しました。[検証記録](docs/development.md)へ工程ごとに記録しています。コメント工程当時は開発DBを変更せず、既存migrationを維持してcommentsを追加しました。今回のFR-09工程の開発DB適用・投入は冒頭の記録を参照してください。
 
-AWS 基本設計と費用を公式仕様に照らして文書化しました。AWS リソース作成・実機検証は行っていません。構築・検証・撤去を含む月 60 時間の提案条件では約 2,134 円（税込、1 USD = 160 円の仮定）ですが、期間外の ALB・ECS・RDS 撤去が前提です。詳しくは [費用見積もり](docs/costs.md)を参照してください。
+AWS 基本設計と費用を公式仕様に照らして文書化しました。AWS リソース作成・実機検証は行っていません。構築・検証・撤去を含む月 60 時間の提案条件では約 2,312 円（税込、1 USD = 160 円の仮定、state専用KMSを含む）ですが、期間外の ALB・ECS・RDS 撤去が前提です。詳しくは [費用見積もり](docs/costs.md)を参照してください。
 
 ## 開発開始前の秘密情報検査
 
@@ -51,7 +53,7 @@ python scripts/secrets.py files
 | DB | PostgreSQL 18.6（ローカル。RDS の採用版は別途確認） |
 | 開発環境 | Docker |
 | 本番環境 | AWS ECS（Fargate と周辺構成は基本設計案） |
-| インフラ構築 | Terraform |
+| インフラ構築 | Terraform1.16.5 / AWS Provider6.67.0、bootstrap・ECRのみコード化 |
 | CI/CD | GitHub Actions |
 | 自動テスト | PHPUnit 13.3.4 + 実PostgreSQL。users・認証・依頼・担当/状態・コメントのHTTP検証を実装 |
 
@@ -76,9 +78,9 @@ AWS の月額予算 **3,000 円**、事前案内した期間のみ公開、独�
 | 項目 | 候補・決める内容 |
 | --- | --- |
 | サービス詳細 | API・ローカル初期投入・ログイン/一覧/登録/詳細/担当/状態/コメント画面は採用済み。AWS投入/運用の詳細はレビュー対象 |
-| 技術の詳細 | Terraform・RDSの対応版。フロントエンド採用版はfrontend文書に記録 |
+| 技術の詳細 | RDSの対応版。Terraform採用版は上記で固定済み。フロントエンド採用版はfrontend文書に記録 |
 | AWS の詳細 | AZ・サイズ・単一taskの性能、公開デモ資格情報の配布経路、予算通知先。内部通信の例外と保存・削除前提は基本設計に反映済み |
-| 品質・検査 | IaC検査の選定、GitHub必須チェックと公開証跡の運用。Gitleaks / Composer・npm audit / Trivy0.74.0・CycloneDXは採用済み。imageはCritical/High・検査不能で失敗、CIのJSON証跡は7日保持 |
+| 品質・検査 | IaC検査のLOW残存事項、GitHub必須チェックと公開証跡の運用。Gitleaks / Composer・npm audit / Trivy0.74.0・CycloneDXは採用済み。imageはCritical/High・検査不能で失敗、CIのJSON証跡は7日保持 |
 
 Cookie認証方針は採用し、ローカルで検証しました。具体的なAWS配置・HTTPS / trusted proxyの実機動作は未検証です。
 
@@ -89,6 +91,7 @@ Cookie認証方針は採用し、ローカルで検証しました。具体的�
 - [セキュリティ](docs/security.md)：セキュリティ要件、検証方法、未決定の運用基準
 - [開発環境](docs/development.md)：Windowsでの起動・migration・テスト・停止、採用版と検証記録、秘密情報検査
 - [AWS 基本設計](docs/architecture.md)：構成、認証、暗号化、公開・撤去・再構築の案
+- [Terraform初期基盤](docs/terraform.md)：state保護・ECR・AWS非接続検査・Fargate移行差分
 - [費用見積もり](docs/costs.md)：公式単価、月 60 時間の費用、予備費と超過要因
 - [DB 設計](docs/database.md)：ER図、制約、ロック・競合、初期投入とデータ寿命
 - [API 設計](docs/api.md)：認証、入出力、エラー、再取得・非再送
@@ -106,7 +109,7 @@ Cookie認証方針は採用し、ローカルで検証しました。具体的�
 
 1. **画面全体の利用者レビュー**：登録から完了までの導線、コメント結果不明時の案内、キーボード操作を確認する。
 2. **公開時の認証運用**：資格情報の配布経路、trusted proxy、session / cache清掃、要求の強制終了設定を決める。ハッシュコスト・単一タスク性能はAWSで別途検証する。
-3. **リリース条件**：採用したimage検査のGitHub実行・必須チェック、IaC検査、予算通知先を決める。ローカル検証成功をAWS/CI成功とは扱わない。
+3. **リリース条件**：採用したimage検査のGitHub実行・必須チェック、IaC残存事項の対応、予算通知先を決める。ローカル検証成功をAWS/CI成功とは扱わない。
 
 ## ローカルの users・認証・依頼・担当/状態検証
 

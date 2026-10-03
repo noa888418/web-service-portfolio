@@ -153,3 +153,9 @@ try {
 | 文書・秘密情報 | ローカル参照リンク、作業ツリー/ステージ済み両方のgit diff --check、LF指定、PowerShell構文、Gitleaks files/staged成功。資格情報・秘密鍵・image archiveはGit除外 |
 
 公開前には(1) CloudFront/ALBの転送・cache/実IP/HTTPS判定とRDS TLS verify-full、(2) ECSのread-only書込volume・UID・healthcheck・worker停止/DB rollback・負荷とtimeout、(3) GitHub上の対象commit/URL/結果、必須チェック、公開資格情報・監視/保存期限・OIDC/IaCを確認します。今回のローカルHTTPS成功をAWS経路の検証済みとは扱いません。順番を制御した画面通し試験と、既存バックエンド並行HTTP/DB試験も区別します。
+
+## Terraform工程で整理したAWS移行差分（2026-10-03）
+
+[Terraform初期基盤](terraform.md)にFargateのtmpfs非対応・volume所有権/UID10001・共有しないmount・破棄時点、同一task localhost、起動/停止/healthcheck、CloudFront/ALBのHTTPS/Host/IP境界、RDS verify-full/CA/DB権限/公開seedを記録しました。今回本番image・Composeは変更していません。
+
+PHPUnitの270試験は8.4.25、配布FPMは8.4.26です。8.4.26のHTTPS通し成功と全suite成功は別です。後工程で配布php-baseから隔離test targetを派生させ、dev依存を最終imageへ入れず、同じ拡張/runtime libraryで全回帰を追加します。現行DB設定のsslmode=disableはローカル専用で、そのままRDSへ公開しません。AWS実機と8.4.26全回帰は未実施です。

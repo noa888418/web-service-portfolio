@@ -2,6 +2,8 @@
 
 ## 状態と適用範囲
 
+2026-10-03追加：state S3の公開禁止・versioning・TLS強制・SSE-KMS/専用鍵、ECRの不変タグ・暗号化・誤削除防止をTerraformで実装しました。fmt/init-backend=false/validate/mock/Trivy config/Git除外を検査します。IaCはHIGH/CRITICAL・検査不能で失敗、LOW/MEDIUMは記録し、実AWSの権限・ロック・復元は未検証です。[検査結果と残存事項](terraform.md)を参照してください。前工程のTerraform未実装という記録はこの範囲で更新します。実際のIAM/OIDC/ネットワーク保護は未実装です。
+
 **2026-10-01の現在の状態**：認証・依頼・担当/状態・コメントのAPIとReact画面、本番Nginx/PHP-FPM、隔離ローカルHTTPS、Trivy image検査・SBOMを実装しました。AWS・Terraform・公開デモ投入は未実施です。以下の過去工程の「未実装」は当時の記録で、現在の範囲はこの節と[本番検証記録](production.md)を優先します。
 
 | 守るデータ → 脅威 | 実装した対策 | 検証済み | 未検証・限界 |
@@ -216,7 +218,7 @@ APP-SEC-01の認証、APP-SEC-02/03の依頼/コメント認可、APP-SEC-04の�
 
 Terraform の `sensitive` は表示を抑制する仕組みで、状態ファイルに秘密情報が保存されない保証ではありません。[HashiCorp の機密データ管理](https://developer.hashicorp.com/terraform/language/manage-sensitive-data)を踏まえ、状態ファイル自体を保護します。[GitHub の AWS OIDC ガイド](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws)を参照し、長期 AWS キーを保管しない方針案にしています。詳細な権限・復旧操作は実装前にレビューします。
 
-公開・撤去ではstate bucketやsnapshotを一括destroyに含めず、DB復元確認と旧世代削除を分離します。保存中は復号鍵を維持します。予算通知は強制停止ではないため公開終了と残存確認を運用者が行う案です。Gitleaks、Composer/npm audit、最終imageのTrivy/SBOMはローカル実施済みですが、Terraform・AWS検査や追加workflowのGitHub上の成功は未確認です。
+公開・撤去ではstate bucketやsnapshotを一括destroyに含めず、DB復元確認と旧世代削除を分離します。保存中は復号鍵を維持します。予算通知は強制停止ではないため公開終了と残存確認を運用者が行う案です。Gitleaks、Composer/npm audit、最終imageのTrivy/SBOMはローカル実施済みですが、Terraformの限定2rootの静的検証はterraform文書を参照し、AWS実機検査や追加workflowのGitHub上の成功は未確認です。
 
 削除確認は作成者が行い、復元検証中の旧snapshotも7日期限を延長しません。誤投入では閉鎖・該当資格情報失効・影響調査・汚染したDB行/snapshot/ログの除去を先行させ、通常の保持期限を待ちません。削除操作の証跡に秘密値を転記せず、再復元による再混入を防ぎます。
 
@@ -231,7 +233,7 @@ Terraform の `sensitive` は表示を抑制する仕組みで、状態ファイ
 
 - **決定済み**：失敗・未実施を成功扱いにしない。テストや検査を無効化して通さない。
 - **秘密情報検査で決定済み**：Gitleaks 8.30.1 の既定ルールを使用し、1 件以上の検出で失敗する。検査エラーも失敗とし、全秘密値を伏せる。インラインの `gitleaks:allow` による除外は許可しない。現在は独自 allowlist・baseline を設定していない。
-- **未決定・要確認**：秘密情報検査以外の検査ツール、脆弱性の重大度・修正可能性に応じた停止基準、追加の必須チェック、定期実行頻度、証跡の保存先・期間。GitHub の `Gitleaks` 必須チェック設定は別途確認が必要で、設定済みとして扱わない。検査導入時に基準を明文化し、基準未決定の状態を公開可能とみなさない。
+- **未決定・要確認**：既に採用したGitleaks/Trivy（image・IaC）以外の追加ツールと基準、追加の必須チェック、定期実行頻度、証跡の保存先・期間。GitHub の `Gitleaks` 必須チェック設定は別途確認が必要で、設定済みとして扱わない。検査導入時に基準を明文化し、基準未決定の状態を公開可能とみなさない。
 - **提案**：検出内容を調査し、修正して同じ検査を再実行する。誤検知なら根拠・対象・確認者・期限を記録し、除外はその対象に限定する。検査全体の停止や、都合のよい基準変更で解消扱いにしない。
 - **提案**：検証結果には要件 ID、対象コミットまたはイメージダイジェスト、実行環境、ツール・ルールのバージョン、日時、結果、対応内容を記録する。証跡に秘密情報を含めない。
 - **提案**：秘密情報の漏えいが判明した場合は、対象を失効・再発行し、影響範囲とログ・履歴・イメージへの混入を調査する。ファイルを削除しただけで解決扱いにしない。

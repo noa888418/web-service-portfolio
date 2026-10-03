@@ -1,5 +1,7 @@
 # AWS 基本設計案
 
+2026-10-03追加：bootstrapのstate S3/専用KMSとfoundationのprivate ECRのみTerraformへ実装しました。[初期基盤とAWS移行差分](terraform.md)を参照してください。Fargateのvolume/UID、healthcheck/停止、CF生成headerによるHTTPS/Host/IP、RDS TLS/権限、配布PHP版回帰は同文書の後工程案です。AWS資源は未作成です。
+
 2026-10-01追加：Nginx + React成果物 / PHP-FPMの本番用2イメージと、実PostgreSQLを使う隔離ローカルHTTPS検証を実装しました。[構成・採用版・検査・Windows手順](production.md)を参照してください。以下のAWS配置は引き続き提案・未検証です。ローカルで確認したSecure Cookieやread-only起動を、CloudFront/ALB/ECSの確認済みと読み替えません。
 
 ## 決定事項と提案の境界
@@ -8,7 +10,7 @@
 
 以下は**成立条件を調査した基本設計の提案**です。東京リージョン、CloudFront 従量課金・標準ドメイン、VPC オリジン、非公開 ALB、ECS Fargate、非公開 Single-AZ RDS、NAT Gateway・Redis なしという構成は、AWS 実機での検証・採用確定ではありません。機能・権限の詳細も [requirements.md](requirements.md) のレビュー対象のままです。
 
-公式仕様の確認日：**2026-09-21**。Terraform AWS Provider **v6.65.0** の文書を確認しました。これは調査基準であり、導入済みバージョンではありません。実装時に Terraform 本体、Provider、Laravel / PHP / Node / PostgreSQL 等の対応バージョンを固定し、lock ファイルを管理します。費用は [costs.md](costs.md) を参照してください。
+以下のAWS全体設計は2026-09-21のProvider6.65.0での調査を基礎にしています。2026-10-03の実装対象はTerraform1.16.5 / Provider6.67.0で固定し、lockを管理します。CloudFront等の未実装リソースは各実装時に再確認します。費用は [costs.md](costs.md) を参照してください。
 
 ## 今回反映した運用前提（2026-09-22）
 
@@ -108,11 +110,11 @@ Laravel SanctumのCookieセッション認証は2026-09-27に採用し、ロー�
 | CloudFront behavior | キャッシュ | origin への転送 |
 | --- | --- | --- |
 | `/assets/*`（ハッシュ付き静的成果物だけ） | GET / HEAD のみ。専用 cache policy で長期キャッシュを提案 | Cookie・Authorization は転送せず、個人別応答・Set-Cookie を出さない |
-| default `*`（API・認証・index.html を含む） | managed `CachingDisabled`、min/default/max TTL=0 | `AllViewer` を使い Cookie、Authorization、Host、Origin、Referer、CSRF ヘッダー、query string を転送する案。全 HTTP method を許可し、API ごとの許可は Laravel で制限 |
+| default `*`（API・認証・index.html を含む） | managed `CachingDisabled`、min/default/max TTL=0 | viewer全headerとCloudFront生成のViewer-Address/Forwarded-Protoを転送する専用origin request policy案（詳細はterraform文書）。Cookie、Authorization、Host、Origin、Referer、CSRF、query stringを維持。全 HTTP method を許可し、API ごとの許可は Laravel で制限 |
 
 未知の新規 API も default で非キャッシュになる設計です。Laravel は API・認証応答に `Cache-Control: private, no-store` を付け、ブラウザー側も保存しません。CloudFront で設定可能なエラーステータスの error caching minimum TTL は 0 にし、401 / 403 等を一律に SPA の 200 へ変換しません。Set-Cookie を静的キャッシュへ混ぜないことを確認します。Cookie をキャッシュキーに入れるだけで「認証応答をキャッシュしない」要件を満たしたことにはしません。[managed cache policy](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-cache-policies.html)、[managed origin request policy](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/using-managed-origin-request-policies.html)
 
-公開ホストを `APP_URL` と Sanctum の stateful domain に設定します。Host は標準ドメインの完全一致だけを受け付けます。CloudFront は viewer の `X-Forwarded-Proto` を除去し、内部 HTTP のため ALB が付ける値も viewer の HTTPS を表しません。Nginx の公開経路に限って PHP へ安全な HTTPS 情報を設定する案とします。外部入力の X-Forwarded-* を無条件に信用せず、trusted proxy を ALB の経路に限定します。ヘルスチェックは別の非機密パスにします。[CloudFront の要求ヘッダー処理](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/RequestAndResponseBehaviorCustomOrigin.html)
+公開ホストを `APP_URL` と Sanctum の stateful domain に設定します。Host は標準ドメインの完全一致だけを受け付けます。CloudFront は viewer の `X-Forwarded-Proto` を除去し、内部 HTTP のため ALB が付ける値も viewer の HTTPS を表しません。Nginx の公開経路に限って PHP へ安全な HTTPS 情報を設定する案とします。外部入力の X-Forwarded-* を無条件に信用せず、AWS用Nginxの入力検証をALB経路に限定し、Laravelの全proxy信頼は有効にしない案へ具体化しました。詳細は[移行差分](terraform.md)を参照します。ヘルスチェックは別の非機密パスにします。[CloudFront の要求ヘッダー処理](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/RequestAndResponseBehaviorCustomOrigin.html)
 
 検証では A・B の Cookie を交互に使い、同じ URL の本文・Set-Cookie が混ざらないこと、API にキャッシュ Hit / Age が付かないこと、CSRF なし・不一致が拒否されること、Secure Cookie が正しく往復することを確認します。ローカル開発は Vite proxy 等で同一オリジン相当とし、本番で広い CORS 許可を追加して解決しません。
 
@@ -121,7 +123,7 @@ Laravel SanctumのCookieセッション認証は2026-09-27に採用し、ロー�
 - Secrets Manager に DB 管理資格情報、アプリ設定（APP_KEY・アプリ用 DB 資格情報）、migration 用 DB 資格情報、デモ投入用資格情報の計 4 secret を置く見積もり案です。ECS の secrets 参照で必要なコンテナだけに注入し、Nginx へ DB 資格情報を渡しません。task execution role・task role・migration role を分けます。ローテーション後は必要なタスクを再起動します。
 - Terraform は secret の入れ物・ARN を管理する案です。実値を通常の tfvars / `secret_string` / 出力に置かず、RDS 管理資格情報の AWS 管理機能や別の安全な投入手順を選びます。`sensitive` は state を暗号化しないため、値が state に残る経路を個別に確認します。
 - S3 backend は暗号化、Block Public Access、versioning、TLS 強制、最小権限、`use_lockfile=true` を提案します。state・plan・過去バージョンは秘密情報を含むものとして扱い、PR の公開 artifact にしません。ロック操作の権限も必要です。DynamoDB ロックを新規の前提にしません。[S3 backend 仕様](https://developer.hashicorp.com/terraform/language/backend/s3)
-- S3 / ECR は標準の保存時暗号化、RDS / Secrets Manager は AWS 管理 KMS key を初期費用案とします。customer managed KMS key は別途費用・削除防止設計が必要です。バックアップを残す間は復号鍵と必要な APP_KEY を保持します。
+- state S3は今回専用customer managed KMS keyへ変更し、費用・rotation・削除防止を反映しました。ECRはAES256、その他のS3/RDS/Secrets Managerの暗号化は初期案を維持します。バックアップを残す間は復号鍵と必要な APP_KEY を保持します。
 - アプリログは CloudWatch Logs、ALB / CloudFront のアクセスログは非公開 S3 へ保管する案です。Cookie・Authorization・パスワード・本文全文をログに出さず、URL query に秘密値を載せません。CloudFront の Cookie logging は無効、詳細ログのフィールド・マスキングを設計します。保存期間は今回の前提でアプリログ7日、アクセスログ30日。作成者が期限削除・実際の残存を確認し、権限と lifecycle は実装前にレビューします。
 
 ## OIDC と変更・検査の流れ
@@ -150,7 +152,7 @@ Terraform plan、apply、ECR push / ECS deploy、データ操作は権限を分�
 | edge（常設を推奨） | CloudFront Distribution、停止用 S3 origin の OAC | 期間外は停止用 origin に切り替え、Distribution を無効化。従量課金でリクエストがなければ配信利用料なし |
 | runtime（期間限定） | 内部 ALB / listener / SG、VPC origin、ECS service / task、RDS | 課金開始から削除完了まで月合計 60 時間を見積もりの基準にする。snapshot は runtime と一緒に削除しない |
 
-各 root module に別の state key と権限を使い、通常の撤去権限では bootstrap / foundation / edge を削除できない構成を提案します。workspace 名や `prevent_destroy` だけを誤削除対策の全てにしません。設定ブロックの削除、AWS コンソール操作、鍵削除にも耐える権限・手順が必要です。root module 名はまだディレクトリとして実装していません。
+各 root module に別の state key と権限を使い、通常の撤去権限では bootstrap / foundation / edge を削除できない構成を提案します。workspace 名や `prevent_destroy` だけを誤削除対策の全てにしません。設定ブロックの削除、AWS コンソール操作、鍵削除にも耐える権限・手順が必要です。bootstrap/foundationは今回の限定範囲で実装し、edge/runtimeは未作成・検査対象外です。
 
 公開・撤去は次の順に行う案です。
 
@@ -182,4 +184,4 @@ Distribution を保持すれば標準ドメインを維持しやすい一方、D
 - 0.5 vCPU / 1 GiB のタスク、db.t4g.micro / gp3 20 GiB の性能とメモリ余裕。Single-AZ・単一タスクの停止許容、使用時間・アクセス量の上限。
 - seedの明示許可・DB照合の具体的なジョブ実装。Providerの依存順、AZ・SG・Cookie・cache・7日保持と復元・失効を小さな実機検証で確かめる。保存方針と作成者責任は今回の前提として反映済み。
 
-本書のAWS構成は仕様調査と設計までです。Terraform validate / plan / apply、AWS疎通・公開経路の認証/CSRF・復元検証は未実施です。認証APIのローカルHTTP検証は [開発記録](development.md)に分けて記載します。
+本書のAWS全体構成は仕様調査・設計段階です。今回の限定2rootの静的検証結果はterraform文書へ記録します。実AWS plan/apply、AWS疎通・公開経路の認証/CSRF・復元検証は未実施です。認証APIのローカルHTTP検証は [開発記録](development.md)に分けて記載します。
