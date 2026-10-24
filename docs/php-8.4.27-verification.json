@@ -1,0 +1,141 @@
+{
+  "baseline_commit": "eeb8c997677c4f8091fb94dbf95befd7223127c0",
+  "working_tree": "uncommitted PHP security update; not a GitHub CI result",
+  "php_version": "8.4.27",
+  "base_images": {
+    "cli": "php:8.4.27-cli-alpine3.24@sha256:8d29b132476e5f54633d30bfbfa0b0b7c95a9cb0c308b3175d61351aea73b643",
+    "fpm": "php:8.4.27-fpm-alpine3.24@sha256:8ce34c869fae0f8da2c82d8aeda222f0782e8e5ae2b370fb43cbad84e9e2ea55"
+  },
+  "php_regression": {
+    "cli": {
+      "tests": 270,
+      "assertions": 3855,
+      "exit_code": 0
+    },
+    "production_php_base_cli": {
+      "tests": 270,
+      "assertions": 3855,
+      "exit_code": 0,
+      "image_id": "sha256:843bf9156c8a305e6ac69dde32c2efecd055d20b8045d47ce85905456f7fd5fc",
+      "scope": "verification-only Linux image, production php-base with test source/vendor from rebuilt local image; not the distribution image"
+    }
+  },
+  "frontend": {
+    "mock_tests": 136,
+    "typecheck": "passed",
+    "lint": "passed",
+    "build": "passed",
+    "isolated_real_browser": "passed",
+    "npm_audit_exit_code": 1,
+    "npm_vulnerability_counts": {
+      "info": 0,
+      "low": 0,
+      "moderate": 2,
+      "high": 2,
+      "critical": 0,
+      "total": 4
+    }
+  },
+  "composer_audit": {
+    "exit_code": 0,
+    "advisories": 0
+  },
+  "development_data": {
+    "users": 4,
+    "service_requests": 5,
+    "comments": 4,
+    "initial_final_fingerprints_match": true,
+    "container_left_stopped": true
+  },
+  "integration": {
+    "verified_utc": "2026-10-22T14:25:22.173380+00:00",
+    "result": "passed",
+    "runtime_images": {
+      "php": "sha256:b433de1d3fa56c6fae51c6a65fdfc473112559dc28984353ecb61576cae5e5c9",
+      "nginx": "sha256:ffcc9a40410d8f299a53bce085d1de89df6ebda971a77d3461444902ff878b1c"
+    },
+    "entrypoint": "https://localhost:8443",
+    "scope": "trusted isolated Chromium; production FPM; same-request create/assign/start/comments/complete; A/B isolation; Cookie/CSRF/logout; read-only/non-root/private ports",
+    "aws_verified": false
+  },
+  "images": [
+    {
+      "image": "it-requests-php:production",
+      "image_id": "sha256:b433de1d3fa56c6fae51c6a65fdfc473112559dc28984353ecb61576cae5e5c9",
+      "repo_digests": [
+        "it-requests-php@sha256:b433de1d3fa56c6fae51c6a65fdfc473112559dc28984353ecb61576cae5e5c9"
+      ],
+      "scan_utc": "2026-10-22T14:29:03.877967+00:00",
+      "trivy": "aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+      "policy": "HIGH/CRITICAL or scanner error fails; no ignore-unfixed",
+      "platform": "linux/amd64",
+      "layer_runtime_secret_and_forbidden_file_check": "passed",
+      "inventory_components": 118,
+      "sbom": "php-sbom.cdx.json",
+      "sbom_sha256": "94de7456a376a796eab3358a18972ebdec0c839ba5b6fd51e45651e6930e586d",
+      "scanned_types": [
+        "alpine",
+        "composer-vendor"
+      ],
+      "severity_counts": {
+        "UNKNOWN": 0,
+        "LOW": 0,
+        "MEDIUM": 0,
+        "HIGH": 0,
+        "CRITICAL": 0
+      },
+      "vulnerability_database": {
+        "Version": 2,
+        "NextUpdate": "2026-10-23T13:15:26.425424534Z",
+        "UpdatedAt": "2026-10-22T13:15:26.425424764Z",
+        "DownloadedAt": "2026-10-22T14:28:40.423397817Z"
+      },
+      "vulnerability_report": "php-vulnerabilities.json",
+      "result": "passed"
+    },
+    {
+      "image": "it-requests-nginx:production",
+      "image_id": "sha256:ffcc9a40410d8f299a53bce085d1de89df6ebda971a77d3461444902ff878b1c",
+      "repo_digests": [
+        "it-requests-nginx@sha256:ffcc9a40410d8f299a53bce085d1de89df6ebda971a77d3461444902ff878b1c"
+      ],
+      "scan_utc": "2026-10-22T14:29:21.056350+00:00",
+      "trivy": "aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969",
+      "policy": "HIGH/CRITICAL or scanner error fails; no ignore-unfixed",
+      "platform": "linux/amd64",
+      "layer_runtime_secret_and_forbidden_file_check": "passed",
+      "inventory_components": 26,
+      "sbom": "nginx-sbom.cdx.json",
+      "sbom_sha256": "f06786d718ff4aa855b54631a9df5d8612777f84eba631bc8a63a3bfee8bf697",
+      "scanned_types": [
+        "alpine",
+        "node-pkg"
+      ],
+      "severity_counts": {
+        "UNKNOWN": 2,
+        "LOW": 0,
+        "MEDIUM": 1,
+        "HIGH": 0,
+        "CRITICAL": 0
+      },
+      "vulnerability_database": {
+        "Version": 2,
+        "NextUpdate": "2026-10-23T13:15:26.425424534Z",
+        "UpdatedAt": "2026-10-22T13:15:26.425424764Z",
+        "DownloadedAt": "2026-10-22T14:28:40.423397817Z"
+      },
+      "vulnerability_report": "nginx-vulnerabilities.json",
+      "result": "passed"
+    }
+  ],
+  "not_verified": [
+    "GitHub Actions for this change",
+    "AWS path",
+    "cold-cache Composer download while GitHub connection is unavailable"
+  ],
+  "remaining": [
+    "npm audit: high 2, moderate 2",
+    "nginx: medium 1, unknown 2",
+    "manual development container switch"
+  ]
+}

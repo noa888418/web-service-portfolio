@@ -1,5 +1,7 @@
 # 本番用イメージと隔離HTTPS統合検証
 
+2026-10-22にPHPを8.4.27へ更新し、24日にBrotli/Nginx等を修正してCLI全270試験と最終FPMのHTTPS検証を再確認しました。現在のNginxは1.30.6、最終2イメージのTrivyは全重大度0件です。npm監査はHigh 3 / Moderate 2が残ります。最新のdigest・SBOM・Windows切替手順は[PHP更新記録](php-security-update.md)を参照してください。以下の採用版表と2026-10-01の結果は、初回実装時の履歴です。
+
 ## 採用範囲と構成
 
 2026-10-01、既存の12 API・認証・4画面を維持し、NginxでReact成果物を配信しPHP-FPMでLaravelを実行する2イメージを追加しました。開始HEADは`4da63475347e301d5cf4b99914ead81ab7fd2645`、開始時の未コミット差分はありませんでした。AWS、公開用seed、レジストリpush、commit・pushは実施していません。
@@ -158,4 +160,8 @@ try {
 
 [Terraform初期基盤](terraform.md)にFargateのtmpfs非対応・volume所有権/UID10001・共有しないmount・破棄時点、同一task localhost、起動/停止/healthcheck、CloudFront/ALBのHTTPS/Host/IP境界、RDS verify-full/CA/DB権限/公開seedを記録しました。今回本番image・Composeは変更していません。
 
-PHPUnitの270試験は8.4.25、配布FPMは8.4.26です。8.4.26のHTTPS通し成功と全suite成功は別です。後工程で配布php-baseから隔離test targetを派生させ、dev依存を最終imageへ入れず、同じ拡張/runtime libraryで全回帰を追加します。現行DB設定のsslmode=disableはローカル専用で、そのままRDSへ公開しません。AWS実機と8.4.26全回帰は未実施です。
+当工程時点のPHPUnitの270試験は8.4.25、配布FPMは8.4.26でした。8.4.26のHTTPS通し成功と全suite成功は別です。配布php-baseから隔離test targetを派生させ、同じ拡張/runtime libraryで全回帰を追加する案は残します。現行DB設定のsslmode=disableはローカル専用で、そのままRDSへ公開しません。AWS実機と8.4.26全回帰は未実施です。
+
+## PHPセキュリティ更新（2026-10-22）
+
+開発・テスト・本番用PHPイメージを8.4.27へ統一しました。公式digest、再ビルド・回帰・最新脆弱性DB・SBOMの今回の結果は[更新記録](php-security-update.md)を参照してください。上記の2026-10-01の検証記録と`production-verification.json`は当時の履歴として保持します。npm監査の未解消検出は本番イメージのHigh/Critical基準合格と区別します。

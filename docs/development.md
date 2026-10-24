@@ -1,5 +1,7 @@
 # 開発環境・users / 認証検証・Windowsでの秘密情報検査
 
+2026-10-22のPHPセキュリティ更新で、開発・PHPUnit・配布FPMのイメージを8.4.27へ統一しました。24日にBrotli/Nginx等の修正を追加し、開発CLI・本番php-baseのCLIで各270テスト・3,855アサーション、最終FPMのHTTPS検証を再確認しました。最終イメージ検査は全重大度0件ですが、npm監査のHigh 3 / Moderate 2は未解消です。[今回の検証結果とデータ保持の切替手順](php-security-update.md)を参照してください。以下の過去の8.4.25/8.4.26による結果は履歴として残します。
+
 ## プロジェクトの決定事項と現在の範囲
 
 最新工程は**本番Nginx + PHP-FPMイメージ・隔離HTTPS統合検証**です。[production.md](production.md)に採用版・失敗時停止付きPowerShell・証明書更新・データ保持・検査証跡を記録しました。開発Viteの入口127.0.0.1:5173は維持し、本番構成の検証専用入口はhttps://localhost:8443です。以下の従来工程の記録は当時の範囲を残します。
@@ -145,7 +147,7 @@ users保存検証に続き、Cookieログイン・me・logout、停止者拒否�
 | 対象 | 実行確認した採用版 | 選定理由・公式根拠 |
 | --- | --- | --- |
 | Laravel | 13.32.0 | 13系はPHP 8.3～8.5対応、bug fixは2027年第3四半期、security fixは2028-03-17まで。12系はbug fix終了済みのため新規には13系を採用。[サポート表](https://laravel.com/docs/13.x/releases) |
-| PHP | 8.4.25、CLI Alpine | Laravel13とPHPUnit13の対応範囲が重なる版。8.4はactive support 2026-12-31、security support 2028-12-31まで。8.5も候補だが今回必要な機能は8.4で満たせる。2026年末までに8.5移行を再評価。[サポート表](https://www.php.net/supported-versions.php) |
+| PHP | 8.4.27、CLI Alpine3.24（本番FPMも8.4.27） | Laravel13とPHPUnit13の対応範囲を維持し、2026-10-21告知のセキュリティ修正を反映。8.4はactive support 2026-12-31、security support 2028-12-31まで。2026年末までに8.5移行を再評価。[サポート表](https://www.php.net/supported-versions.php)、[更新記録](php-security-update.md) |
 | Composer | 2.10.3 | Composer2の現行安定系を固定。必要PHPは7.2.5以上で8.4と互換。ComposerイメージからバイナリだけをPHP8.4へコピーし、別PHP版で依存を解決しない。[必要条件](https://getcomposer.org/doc/00-intro.md)、[配布元](https://getcomposer.org/download/) |
 | PostgreSQL | 18.6、Alpine | 18系の修正版、保守期限2030-11-14。Laravelの対応DBに含まれる。17系も候補だが新規ローカル環境は長い保守期間を選択。RDSのengine版・拡張・費用はAWS工程で改めて確認。[保守表](https://www.postgresql.org/support/versioning/)、[Laravel対応DB](https://laravel.com/docs/13.x/database) |
 | PHPUnit | 13.3.4 | PHP 8.4以上、13系bug fix期限2028-02-04。追加のPest層を置かずPHPUnitの標準テストを直接使用。[対応表](https://phpunit.de/supported-versions.html) |

@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
-FROM php:8.4.26-fpm-alpine3.24@sha256:78cd8de9970a9cd6ff4d98860a94eb5bf37dd2d5776b4785562dbfad01c29d5a AS extensions
+FROM php:8.4.27-fpm-alpine3.24@sha256:8ce34c869fae0f8da2c82d8aeda222f0782e8e5ae2b370fb43cbad84e9e2ea55 AS extensions
 RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS postgresql-dev oniguruma-dev \
     && docker-php-ext-install -j2 pdo_pgsql opcache mbstring
 
-FROM php:8.4.26-fpm-alpine3.24@sha256:78cd8de9970a9cd6ff4d98860a94eb5bf37dd2d5776b4785562dbfad01c29d5a AS php-base
-RUN apk add --no-cache libpq oniguruma 'nghttp2-libs>=1.70.0-r0' \
+FROM php:8.4.27-fpm-alpine3.24@sha256:8ce34c869fae0f8da2c82d8aeda222f0782e8e5ae2b370fb43cbad84e9e2ea55 AS php-base
+RUN apk add --no-cache libpq oniguruma 'nghttp2-libs>=1.70.0-r0' 'brotli-libs>=1.2.1-r0' \
     && addgroup -g 10001 app && adduser -D -u 10001 -G app app \
     && rm -rf /usr/src/php* /usr/local/include/php /usr/local/lib/php/build \
     && rm -f /usr/local/bin/phpize /usr/local/bin/php-config /usr/local/bin/docker-php-ext-* /usr/local/bin/docker-php-source
@@ -16,7 +16,9 @@ FROM php-base AS dependencies
 COPY --from=composer:2@sha256:a5f59b9fd2faf31218632be4809dc6491761085e8064c31dc3b84378c48c248b /usr/bin/composer /usr/local/bin/composer
 COPY backend/composer.json backend/composer.lock ./
 COPY backend/app ./app
-RUN composer validate --strict && composer install --no-dev --no-scripts --no-interaction --prefer-dist --no-progress --optimize-autoloader \
+RUN --mount=type=cache,id=portfolio-composer-downloads,target=/tmp/composer/cache,uid=10001,gid=10001,sharing=locked \
+    export COMPOSER_CACHE_DIR=/tmp/composer/cache \
+    && composer validate --strict && composer install --no-dev --no-scripts --no-interaction --prefer-dist --no-progress --optimize-autoloader \
     && composer check-platform-reqs --no-dev
 
 FROM php-base AS php
@@ -46,8 +48,8 @@ COPY frontend/index.html frontend/tsconfig.json frontend/vite.config.ts ./
 COPY docker/production/npm-inventory.mjs /build-inventory.mjs
 RUN npm run build && node /build-inventory.mjs
 
-FROM nginx:1.30.5-alpine-slim@sha256:32463212baf0e7d91aded2e9b843a4f2b9e017804b8c9d5bae7b51dcef64389c AS nginx
-RUN apk add --no-cache 'pcre2>=10.49-r0'
+FROM nginx:1.30.6-alpine-slim@sha256:d9322bba63c6cfc63dc9e86522fd4f95fd4d9020a02b5bced282bbf38b8c3960 AS nginx
+RUN apk add --no-cache 'pcre2>=10.49-r0' 'musl>=1.2.6-r3' 'musl-utils>=1.2.6-r3' 'zlib>=1.3.2-r1'
 COPY --from=frontend /build/dist /srv/www
 # Retain dependency metadata outside the web root for SBOM/vulnerability inventory.
 COPY frontend/package.json frontend/package-lock.json /usr/share/portfolio-inventory/

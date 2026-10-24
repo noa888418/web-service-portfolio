@@ -132,7 +132,7 @@ SG/Hostだけで任意headerを信用できるとは扱いません。偽造XFF/
 
 アプリDB roleは必要テーブルDML/sequence/schema USAGEのみ、DDL/CREATEROLE/管理者権限なし。migration roleは専用schemaのDDL所有者で通常taskへ注入しません。IAMとSQL権限は別です。公開seedは管理taskで、用途demo・明示許可・publication_id/seed_version・空DB/成功記録・実DB/username/schema一致に加え、AWS account/region/RDS identity/endpointを許可対象と照合する後工程です。現在のlocalガードを緩めて通しません。公開資格情報の配布/失効、最小権限、RDS対応版は未決定/未検証です。
 
-PHPUnit270試験はPHP8.4.25、配布FPMは8.4.26です。HTTPS通しは8.4.26ですが、**270試験全件を8.4.26で成功した証拠ではありません**。後工程で配布Dockerfileのphp-base（同じdigest/拡張/runtime library）からdev依存だけ加えたtest targetを作り、既存接続先ガードと隔離PG/schemaで全suiteを実行する案です。PHPUnit/Composerを最終配布imageに残さず、8.4.25検査を維持してCIへ8.4.26検査を追加します。今回はアプリ/DB不変更のため実施していません。
+当工程時点のPHPUnit270試験はPHP8.4.25、配布FPMは8.4.26でした。HTTPS通しは8.4.26ですが、**270試験全件を8.4.26で成功した証拠ではありません**。2026-10-22にCLI/FPMを8.4.27へ統一し、通常CLIと配布php-baseの同じ拡張/runtime libraryを使う検証専用imageで、それぞれ270テスト・3,855アサーションを確認しました。[PHP更新記録](php-security-update.md)に一時検証構成と証跡を記録します。配布php-baseでの全suiteを定常CIへ組み込む案は残し、過去版の未実施記録を成功へ書き換えません。
 
 ## 結果と次の単位
 

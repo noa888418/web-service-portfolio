@@ -6,6 +6,8 @@
 
 ## 現在の状態と今回の範囲
 
+**2026-10-24：開発・テスト・本番用PHP 8.4.27への更新と追検証を完了しました。** 公式digest固定、拡張再ビルド、CLI/FPMの実版確認、開発CLI・本番php-baseの各270テスト・3,855アサーション、実ブラウザー/HTTPSが成功。最新DBで追加検出されたBrotli・Nginx等も修正版へ更新し、最終2イメージのTrivyは全重大度0件、SBOM生成成功です。**npm監査のHigh 3 / Moderate 2は未解消で、全検査合格ではありません。** [更新理由・日付別証跡・既存データを保持するWindows切替手順](docs/php-security-update.md)を参照してください。開発コンテナは停止状態を維持し、利用時の切替は手順に従います。以下は過去工程の記録です。
+
 **2026-10-03：Terraform初期基盤を追加しました。** bootstrapの保護付きstate S3/KMS、foundationのprivate ECR 2個と、AWS非接続のfmt/init/validate/mock/IaC検査が対象です。Terraform1.16.5・AWS Provider6.67.0を固定しました。2rootのvalidate・mock8件・IaC・Gitleaksがローカルで成功し、IaCのHigh/Criticalは0、Lowは3件を記録しています。[構成・Windows検査・将来のstate移行・AWS移行差分](docs/terraform.md)を参照してください。実AWS plan/apply/destroy、ECR push、GitHub新workflowの成功確認は未実施です。アプリ・開発DB・既存検証データは変更していません。以下は前工程の記録です。
 
 **本番用Nginx + React成果物 / PHP-FPMの2イメージと、隔離ローカルHTTPS検証を追加しました。** 非root・read-onlyで、社員の登録からITの担当割当・コメント・完了まで同じ依頼で成功しました。PHP270テスト・3,855アサーション、フロント136テストと型/lint/build/auditが成功。最終2イメージのTrivy検査はCritical/Highを含む全重大度0件、SBOMを生成しました。対象と検査の限界、Windows再実行手順は[本番用構成](docs/production.md)を参照してください。開発DBを保持し、AWS構築・レジストリpush・commit/pushは行っていません。GitHub CIの今回の成功は未確認です。以下は前工程の記録です。
@@ -49,7 +51,7 @@ python scripts/secrets.py files
 | 項目 | 方針 |
 | --- | --- |
 | フロントエンド | React19.3.0 + TypeScript6.0.3 + Vite8.3.1、Node24.21.0（Docker、選定根拠はfrontend文書） |
-| バックエンド | Laravel13.32.0 / 開発・PHPUnit用PHP8.4.25 / 本番FPM用PHP8.4.26、Composer2.10.3はビルド・開発専用 |
+| バックエンド | Laravel13.32.0 / 開発・テスト・本番用PHP8.4.27、Composer2.10.3はビルド・開発専用 |
 | DB | PostgreSQL 18.6（ローカル。RDS の採用版は別途確認） |
 | 開発環境 | Docker |
 | 本番環境 | AWS ECS（Fargate と周辺構成は基本設計案） |

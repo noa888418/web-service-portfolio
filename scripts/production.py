@@ -17,6 +17,7 @@ TRIVY = 'aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018
 UID = str(os.getuid()) if hasattr(os, 'getuid') and os.getuid() else '10001'
 GID = str(os.getgid()) if hasattr(os, 'getgid') and os.getgid() else '10001'
 ENV = dict(os.environ, PRODUCTION_UID=UID, PRODUCTION_GID=GID)
+PROXY_ENV = tuple(name for name in ('HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY') if ENV.get(name))
 
 def run(args, capture=False, check=True):
     return subprocess.run(args, cwd=ROOT, env=ENV, check=check, text=True,
@@ -27,11 +28,13 @@ def compose(*args, **kwargs):
     return run(['docker', 'compose', '-f', 'compose.production-test.yaml', *args], **kwargs)
 
 def build():
+    # Docker's predefined proxy args are build-only; never add ENV to final images.
+    proxy_args = [arg for name in PROXY_ENV for arg in ('--build-arg', name)]
     for target in ('php', 'nginx'):
-        run(['docker', 'build', '-f', 'docker/production/Dockerfile', '--target', target,
+        run(['docker', 'build', *proxy_args, '-f', 'docker/production/Dockerfile', '--target', target,
              '-t', f'it-requests-{target}:production', '.'])
-    run(['docker', 'build', '-f', 'frontend/Dockerfile.browser', '-t', 'it-requests-browser:local', 'frontend'])
-    run(['docker', 'build', '-f', 'docker/verification/Dockerfile', '-t', 'it-requests-production-verifier:local', '.'])
+    run(['docker', 'build', *proxy_args, '-f', 'frontend/Dockerfile.browser', '-t', 'it-requests-browser:local', 'frontend'])
+    run(['docker', 'build', *proxy_args, '-f', 'docker/verification/Dockerfile', '-t', 'it-requests-production-verifier:local', '.'])
 
 def setup():
     LOCAL.mkdir(parents=True, exist_ok=True)
@@ -135,7 +138,8 @@ def scan():
             archive = REPORTS / f'{service}.tar'
             run(['docker', 'image', 'save', '-o', str(archive), image_id])
             image_policy(archive, metadata)
-            base = ['docker', 'run', '--rm', '--user', f'{UID}:{GID}', '-e', 'TRIVY_CACHE_DIR=/cache',
+            proxy_env = [arg for name in PROXY_ENV for arg in ('-e', name)]
+            base = ['docker', 'run', '--rm', *proxy_env, '--user', f'{UID}:{GID}', '-e', 'TRIVY_CACHE_DIR=/cache',
                     '--mount', f'type=bind,src={cache},dst=/cache',
                     '--mount', f'type=bind,src={REPORTS},dst=/reports', TRIVY, '--quiet']
             sbom = f'{service}-sbom.cdx.json'
